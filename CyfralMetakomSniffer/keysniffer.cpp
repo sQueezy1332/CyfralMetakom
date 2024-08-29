@@ -22,7 +22,7 @@ Keysniffer::Keysniffer() {
 	ADCSRA = bit(ADEN) | bit(ADSC) | 0b110; //adc enable, 64 prescaler, 250khz, 52us //8mhz 1.6us default
 #endif
 #if defined(ARDUINO_ARCH_ESP32)
-	pInit(pin_data, INPUT);
+	pInit(pin_pullup, INPUT);
 #endif
 	pInit(pin_comparator, INPUT);
 	pInit(pin_data, INPUT);
@@ -211,8 +211,8 @@ maybeStartNibble:
 				}
 			} //Serial.println(nibble, HEX);
 			switch (nibble) {
-			case 0x7: case 0xB: case 0xD:
-			case 0xE: buf[i] |= nibble << j; break;
+			case 0x7: case 0xB: case 0xD: case 0xE: 
+				buf[i] |= nibble << j; break;
 			case 0x1: {
 				memset(buf, 0, i);
 				clearVars();
