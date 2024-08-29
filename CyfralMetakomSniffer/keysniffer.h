@@ -47,6 +47,7 @@ extern const byte pin_pullup;
 #endif
 #define WAIT_RETRY_COUNT	(microsecondsToClockCycles(20) / cyclestoIteraion)
 typedef uint8_t byte;
+typedef uint16_t word;
 typedef uint32_t dword;
 
 extern volatile byte flagInterrupt;
