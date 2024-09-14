@@ -209,10 +209,11 @@ bool Keysniffer::Cyfral(byte buf[]) {
 		case 0x7: case 0xB: case 0xD:case 0xE:
 			if (buf[i] & 0xF) {
 				buf[i] |= nibble << 4;  //writing nibble from MSB
-				continue;
+				break;
+				
 			}
 			else buf[i] |= nibble;
-			break;
+			continue;
 		case 0x1:
 			memset(buf, 0, i);
 			clearVars();
