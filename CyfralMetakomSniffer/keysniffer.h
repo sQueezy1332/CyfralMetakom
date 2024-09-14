@@ -61,7 +61,7 @@ class Keysniffer
 {
 public:
 	Keysniffer();
-	bool KeyDetection(byte buf[]);
+	bool KeyDetection(byte (&buf)[8]);
 	bool Metakom(byte buf[]);
 	bool Cyfral(byte buf[]);
 	void Emulate(const byte buf[], byte keyType, byte emulRetry = 10);
@@ -91,17 +91,14 @@ protected:
 	inline void writeBitCyfral(bool bit, const byte& Tj1, const byte& Tj0);
 	inline void writeBitMetakom(bool bit, const byte& Tj1, const byte& Tj0);
 	bool comparator();
-	void clearVars();
-	
-	word T1 = 0;		// Average full period log 1
-	word T0 = 0;		// Average full period log 0
-	word Ti1 = 0;		// Interval of first period - dutyLow (Cyfral) or dutyHigh (Metakom) for logical 1
-	word Ti0 = 0;		// Interval of first period - dutyLow (Cyfral) or dutyHigh (Metakom) for logical 0
+	inline void clearVars();
+	struct {
+		word t1 = 0;		// Average full period log 1
+		word t0 = 0;		// Average full period log 0
+		word ti1 = 0;		// Interval of first period - dutyLow (Cyfral) or dutyHigh (Metakom) for logical 1
+		word ti0 = 0;		// Interval of first period - dutyLow (Cyfral) or dutyHigh (Metakom) for logical 0
+	} T;
 	byte period = 0;	// Full period
 	byte dutyLow = 0;	// Interval of high current consumption -  log 0
 	byte dutyHigh = 0;	// Interval of low current consumption - log 1
 };
-
-
-
-
