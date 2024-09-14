@@ -99,7 +99,7 @@ bool Keysniffer::KeyDetection(byte(&buf)[8]) {
 	return false;
 }
 
-bool Keysniffer::Metakom(byte buf[]) {
+bool Keysniffer::Metakom(byte(&buf)[8]) {
 	register byte count1 = 0, count0 = 0, parity = 0, i, bitmask;
 	dword startTimer;
 	for (i = 0; i < 3; i++) {
@@ -190,7 +190,7 @@ bool Keysniffer::recvBitMetakom() {
 	return (dutyHigh > dutyLow);
 }
 
-bool Keysniffer::Cyfral(byte buf[]) {
+bool Keysniffer::Cyfral(byte(&buf)[8]) {
 	register byte i = 0, bitmask, nibble;
 	do {
 		for (nibble = 0, bitmask = 0b1000; bitmask; bitmask >>= 1) {
