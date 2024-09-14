@@ -62,8 +62,8 @@ class Keysniffer
 public:
 	Keysniffer();
 	bool KeyDetection(byte (&buf)[8]);
-	bool Metakom(byte buf[]);
-	bool Cyfral(byte buf[]);
+	bool Metakom(byte(&buf)[8]);
+	bool Cyfral(byte(&buf)[8]);
 	void Emulate(const byte buf[], byte keyType, byte emulRetry = 10);
 #ifdef VOLTAGE_MEASURING
 	word Kalman();
