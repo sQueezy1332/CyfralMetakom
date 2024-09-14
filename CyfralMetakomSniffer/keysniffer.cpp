@@ -120,7 +120,7 @@ bool Keysniffer::Metakom(byte buf[]) {
 			}
 		}
 	}
-	for (bitmask = 128; bitmask > 1; bitmask >>= 1) {
+	for (bitmask = 128; bitmask != 1; bitmask >>= 1) {
 		if (recvBitMetakom()) {
 			buf[i] |= bitmask;
 			T1 += period;
@@ -194,37 +194,43 @@ bool Keysniffer::recvBitMetakom() {
 }
 
 bool Keysniffer::Cyfral(byte buf[]) {
-	register byte i, j, bitmask, nibble;
+	register byte i, lsh, bitmask, nibble;
 maybeStartNibble:
-	for (i = 0; i < 4; i++) {
-		for (j = 4; ; j -= 4) {	//writing nibble from MSB
-			for (nibble = 0, bitmask = 0b1000; bitmask; bitmask >>= 1) {
-				if (recvBitCyfral()) {
-					nibble |= bitmask;
-					T1 += period;
-					Ti1 += dutyLow;
-				}
-				else {
-					if (error) goto exit;
-					T0 += period;
-					Ti0 += dutyLow;
-				}
-			} //Serial.println(nibble, HEX);
-			switch (nibble) {
-			case 0x7: case 0xB: case 0xD: case 0xE: 
-				buf[i] |= nibble << j; break;
-			case 0x1: {
-				memset(buf, 0, i);
-				clearVars();
-				goto maybeStartNibble; }
-			default: {
-				error = ERROR_NIBBLE_CYFRAL;
-				goto exit; }
+	i = 0; lsh = 1;
+	do {
+		for (nibble = 0, bitmask = 0b1000; bitmask; bitmask >>= 1) {
+			if (recvBitCyfral()) {
+				nibble |= bitmask;
+				T1 += period;
+				Ti1 += dutyLow;
 			}
-			if (j == 0) break;
+			else {
+				if (error) goto exit;
+				T0 += period;
+				Ti0 += dutyLow;
+			}
+		} //Serial.println(nibble, HEX);
+		switch (nibble) {
+		case 0x7: case 0xB: case 0xD:case 0xE:
+			if (lsh) {
+				buf[i] |= nibble << 4;  //writing nibble from MSB
+				lsh = 0;
+				continue;
+			}
+			else buf[i] |= nibble;
+			lsh = 1;
+			break;
+		case 0x1:
+			memset(buf, 0, i);
+			clearVars();
+			goto maybeStartNibble;
+		default:
+			error = ERROR_NIBBLE_CYFRAL;
+			++i;
+			goto exit;
 		}
-	}//fast division by 24 = (65536 / (200 * 32) - 1) * 24 == 221.76; x = (2 ^ 8) / 24 + 1 = 11,66...
-	buf[4] = (T1 * 11) >> 8;
+	} while (++i < 4);
+	buf[4] = (T1 * 11) >> 8;	//fast division by 24 = (65536 / (200 * 32) - 1) * 24 == 221.76; x = (2 ^ 8) / 24 + 1 = 11,66...
 	buf[6] = (Ti1 * 11) >> 8;
 	buf[5] = T0 >> 3;			// division by 8
 	buf[7] = Ti0 >> 3;
