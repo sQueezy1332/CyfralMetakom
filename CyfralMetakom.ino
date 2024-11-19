@@ -53,8 +53,7 @@ again:
 		else {
 			switch (flagInterrupt) {
 			case RINGCALL: {	//DEBUG(); DEBUG(F("\t 1")); DEBUG(flagSmsNotsended); DEBUG();0
-				dword ringtimestamp = millis() + 150;
-				while (!digitalRead(PIN_RING)) {
+				for (dword ringtimestamp = millis() + 150; !digitalRead(PIN_RING);) {
 					if (millis() > ringtimestamp) {
 						HandleCall();
 						if (flagInterrupt == READDISABLE) goto again;
