@@ -27,7 +27,7 @@ Keysniffer::Keysniffer() {
 	pInit(pin_data, INPUT);
 }
 
-bool Keysniffer::KeyDetection(byte(&buf)[8]) {
+bool Keysniffer::KeyDetection(byte(&buf)[SIZE]) {
 	register byte startNibble, bitmask;
 	word startPeriod;
 	dword tempVoltage, timer;
@@ -51,11 +51,12 @@ bool Keysniffer::KeyDetection(byte(&buf)[8]) {
 #endif // VOLTAGE_MEASURING
 	Start:
 		error = NO_ERROR;
+		clearVars();
 		if (comparator()) { continue; } //wait until high signal is start
-		timer = uS + dutyLow + 450;		//50 - 230 datasheet ~400 for last bit + synchro
+		timer = uS;		
 		wdr;
 		while (!comparator()) {			//Try read METAKOM synchronise bit log 0
-			if (uS > timer) {
+			if (uS - timer > 450) {		//50 - 230 datasheet ~450 for last bit + synchro
 				timer = mS + 200;
 				while (!comparator()) {
 					if (mS > timer) {
@@ -66,7 +67,7 @@ bool Keysniffer::KeyDetection(byte(&buf)[8]) {
 				}
 				//error = ERROR_SYNC_BIT; DEBUG(error);
 				goto Start;
-			}
+			} 
 		}
 		startPeriod = uS - timer + dutyLow;
 		for (bitmask = 0b100, startNibble = 0; bitmask; bitmask >>= 1) {
@@ -75,19 +76,19 @@ bool Keysniffer::KeyDetection(byte(&buf)[8]) {
 			if (startNibble > METAKOM || error)
 				goto Start;
 		}
-		if (startNibble == METAKOM && startPeriod >= period) {
+		if (startNibble == METAKOM && startPeriod + 5 >= period) {
 			if (Metakom(buf)) return METAKOM;
 			DEBUG(error);
 			continue;
-		}//last bit could be volatile if Cyfral
+		}//last bit could be volatile if Cyfral //b000 or b001
 		timer = uS;
-		while (comparator()) {				//wait 1 duty cycle for Cyfral 8 half bits start nibble 
+		while (comparator()) {				//wait 1 duty cycle for last half bit start nibble (Cyfral?) 
 			if (uS - timer > 200) {
 				//error = ERROR_START_DUTY_HIGH; DEBUG(error);
 				goto Start;
 			}
 		}
-		if ((uS - timer) > dutyLow || recvBitCyfral()) {  //duty low from previos read bit Metakom or 0b0_0001
+		if ((uS - timer) > dutyLow || recvBitCyfral()) {  //duty low from previos read bit Metakom or b0_0001
 			if (Cyfral(buf))
 				return CYFRAL;
 			DEBUG(error);
@@ -99,90 +100,66 @@ bool Keysniffer::KeyDetection(byte(&buf)[8]) {
 	return false;
 }
 
-bool Keysniffer::Metakom(byte(&buf)[8]) {
-	register byte count1 = 0, count0 = 0, parity = 0, i, bitmask;
-	dword startTimer;
-	for (i = 0; i < 3; i++) {
-		for (bitmask = 128; bitmask; bitmask >>= 1) {
+bool Keysniffer::Metakom(byte(&buf)[SIZE]) {
+	register byte count1 = 0, count0 = 0, parity = 0, i, BYTE, bitmask;
+	for (i = 0; i < 4; i++) {
+		for (BYTE = 0, bitmask = 128; bitmask; bitmask >>= 1) {
 			if (recvBitMetakom()) {
-				buf[i] |= bitmask;
-				T.t1 += period;
-				T.ti1 += dutyHigh;
+last_bit:
+				BYTE |= bitmask;
+				T1 += period;
+				Ti1 += dutyHigh;
 				count1++;
+				parity ^= 1;
 			}
 			else {
-				if (error) goto exit;
-				T.t0 += period;
-				T.ti0 += dutyHigh;
+				if (error) {
+					if ((bitmask == 1) && (i == 3)) {
+						if (parity) goto last_bit;
+					}
+					else return false;
+				}
+				T0 += period;
+				Ti0 += dutyHigh;
 				count0++;
 			}
 		}
-	}
-	for (bitmask = 128; bitmask != 1; bitmask >>= 1) {
-		if (recvBitMetakom()) {
-			buf[i] |= bitmask;
-			T.t1 += period;
-			T.ti1 += dutyHigh;
-			count1++;
-			parity++;			//counting log 1 in last byte
+		if (parity) {
+			error = ERROR_PARITY_METAKOM;
+			return false;
 		}
-		else {
-			if (error) goto exit;
-			T.t0 += period;
-			T.ti0 += dutyHigh;
-			count0++;
-		}
+		buf[i] = BYTE;
 	}
-	startTimer = uS;
-	while (comparator()) {
-		if (uS - startTimer > 200) {
-			error = ERROR_DUTY_HIGH_METAKOM;
-			goto exit;
-		}
-	}
-	dutyHigh = uS - startTimer;
-	if (parity & 1) {			//check and set parity only for last byte
-		buf[i] |= 1;
-		T.t1 += period;			// previos period
-		T.ti1 += dutyHigh;
-		count1++;
-	}
-	else {
-		T.t0 += period;
-		T.ti0 += dutyHigh;
-		count0++;
-	}
-	buf[4] = T.t1 / count1;		// division  for Period 1
-	buf[6] = T.ti1 / count1;
+	buf[4] = T1 / count1;		// division  for Period 1
+	buf[6] = Ti1 / count1;
 	if (count0) {				//checking for divider not be zero
-		buf[5] = T.t0 / count0;	// division  for Period 0
-		buf[7] = T.ti0 / count0;
+		buf[5] = T0 / count0;	// division  for Period 0
+		buf[7] = Ti0 / count0;
+	} else {
+		buf[5] = 0;
+		buf[7] = 0;
 	}
-	clearVars();
 	return true;
-exit:
-	clearVars();
-	memset(buf, 0, i);
-	return false;
 }
 
 bool Keysniffer::recvBitMetakom() {
-	dword startTimer = uS;
+	dword timer = uS;
 	while (comparator()) {
-		if (uS - startTimer > 200) {
+		if (uS - timer > 200) {
 			error = ERROR_DUTY_HIGH_METAKOM;
 			return false;
 		}
 	}
-	dutyHigh = uS - startTimer;
+	dutyHigh = uS - timer;
+	timer = uS;
 	while (!comparator()) {
-		if (uS - startTimer - dutyHigh > 160) {
+		if (uS - timer > 160) {
 			dutyLow = 160;
 			error = ERROR_DUTY_LOW_METAKOM;
 			return false;		//may be synchronise bit
 		}
 	}
-	dutyLow = uS - startTimer - dutyHigh;
+	dutyLow = uS - timer;
 	if ((period = dutyLow + dutyHigh) < 50) {
 		error = ERROR_PERIOD_METAKOM;
 		return false;
@@ -190,114 +167,79 @@ bool Keysniffer::recvBitMetakom() {
 	return (dutyHigh > dutyLow);
 }
 
-bool Keysniffer::Cyfral(byte(&buf)[8]) {
-	register byte i = 0, bitmask, nibble;
-	do {
-		for (nibble = 0, bitmask = 0b1000; bitmask; bitmask >>= 1) {
+bool Keysniffer::Cyfral(byte (&buf)[SIZE]) {
+again:
+	for(byte i = 0, nibble = 0, bitmask; i < 4;++i) {
+		for (bitmask = 0b1000; bitmask; bitmask >>= 1) {
 			if (recvBitCyfral()) {
 				nibble |= bitmask;
-				T.t1 += period;
-				T.ti1 += dutyLow;
+				T1 += period;
+				Ti1 += dutyLow;
 			}
 			else {
-				if (error) goto exit;
-				T.t0 += period;
-				T.ti0 += dutyLow;
+				if (error) return false;
+				T0 += period;
+				Ti0 += dutyLow;
 			}
 		} //Serial.println(nibble, HEX);
-		switch (nibble) {
+		switch (nibble & 0xF) {
 		case 0x7: case 0xB: case 0xD:case 0xE:
-			if (buf[i] & 0xF) {
-				buf[i] |= nibble << 4;  //writing nibble from MSB
+			if (nibble & 0xF0) {
+				buf[i] = nibble;  //writing nibble from MSB
 				break;
-				
 			}
-			else buf[i] |= nibble;
+			nibble <<= 4;
 			continue;
 		case 0x1:
-			memset(buf, 0, i);
-			clearVars();
-			i = 0;
-			continue;
+			goto again;
 		default:
 			error = ERROR_NIBBLE_CYFRAL;
-			++i;
-			goto exit;
+			return false;
 		}
-	} while (++i < 4);//fast division by 24 = (65536 / (200 * 32) - 1) * 24 == 221.76; x = (2 ^ 8) / 24 + 1 = 11,66...
-	buf[4] = (T.t1 * 11) >> 8;
-	buf[6] = (T.ti1 * 11) >> 8;
-	buf[5] = T.t0 >> 3;			// division by 8
-	buf[7] = T.ti0 >> 3;
-	clearVars();
+	} //fast division by 24 = (65536 / (200 * 32) - 1) * 24 == 221.76; x = (2 ^ 8) / 24 + 1 = 11,66...
+	buf[4] = (T1 * 11) >> 8;
+	buf[6] = (Ti1 * 11) >> 8;
+	buf[5] = T0 >> 3;			// division by 8
+	buf[7] = Ti0 >> 3;
 	return true;
-exit:
-	clearVars();
-	return false;
 }
 
 bool Keysniffer::recvBitCyfral() {
-	dword startTimer = uS;
+	dword timer = uS;
 	while (!comparator()) {
-		if (uS - startTimer > 160) {
+		if (uS - timer > 160) {
 			error = ERROR_DUTY_LOW_CYFRAL;
 			return false;
 		}
 	}
-	dutyLow = uS - startTimer;
+	dutyLow = uS - timer;
+	timer = uS;
 	while (comparator()) {
-		if (uS - startTimer - dutyLow > 200) {
+		if (uS - timer > 200) {
 			error = ERROR_DUTY_HIGH_CYFRAL;
 			return false;
 		}
 	}
-	dutyHigh = uS - startTimer - dutyLow;
-	if ((period = uS - startTimer) < 50) {
+	dutyHigh = uS - timer;
+	if ((period = uS - timer) < 50) {
 		error = ERROR_PERIOD_CYFRAL;
 		return false;
 	}
 	return (dutyHigh > dutyLow);
 }
-
 bool Keysniffer::comparator() {
-	static byte iterator = WAIT_RETRY_COUNT;
-	static byte old_iterator;
-	static char temp;
-	for (;;) {
-		if (COMP) {
-			while (COMP) {
-				if (iterator) {
-					iterator--;
-				}
-				else {//dWrite(5, 0);
-					return false;
-				}
-			}
-			old_iterator = iterator;
-			while (!COMP) {
-				if (iterator < WAIT_RETRY_COUNT) {
-					iterator++;
-				}
-				else {//dWrite(5, 1);
-					return true;
-				}
-			}
-			temp = (iterator - ((iterator - old_iterator) * 2)) - 1;
-			if (temp < 1) {
-				iterator = 0;
-				return false;
-			}
-			else iterator = temp;
-		}
-		else {
-			if (iterator < WAIT_RETRY_COUNT) {
-				iterator++;
-			}
-			else {//dWrite(5, 1);
-				return true;
+	static byte prev_state = COMP;
+	byte state = COMP;
+	if (state != prev_state) {
+		auto time = micros();
+		while (COMP == state) {
+			if (micros() - time > DELAY_COMP) {
+				prev_state = state;
+				return state;
 			}
 		}
 	}
+	return prev_state;
 }
 
 #if defined VOLTAGE_MEASURING || defined (__AVR__)
@@ -310,18 +252,18 @@ word Keysniffer::Kalman() {
 #endif
 void Keysniffer::Emulate(const byte buf[], byte keyType, byte emulRetry) {
 	if (buf[4] && buf[6]) {
-		T.t1 = buf[4];
-		T.t0 = buf[5];
-		T.ti1 = buf[6];
-		T.ti0 = buf[7];
+		T1 = buf[4];
+		T0 = buf[5];
+		Ti1 = buf[6];
+		Ti0 = buf[7];
 	}
 	else {
-		if (keyType == CYFRAL) { T.t1 = T.t0 = 180; T.ti1 = 60; T.ti0 = 120; }
-		else if (keyType == METAKOM) { T.t1 = T.t0 = 180; T.ti1 = 120; T.ti0 = 60; }
+		if (keyType == CYFRAL) { T1 = T0 = 180; Ti1 = 60; Ti0 = 120; }
+		else if (keyType == METAKOM) { T1 = T0 = 180; Ti1 = 120; Ti0 = 60; }
 		else return;
 	}
-	const byte Tj1 = T.t1 - T.ti1;
-	const byte Tj0 = T.t0 - T.ti0;
+	const byte Tj1 = T1 - Ti1;
+	const byte Tj0 = T0 - Ti0;
 	EMULATE_HIGH_ON(pin_data);
 	switch (keyType) {
 	case CYFRAL: {
@@ -341,7 +283,7 @@ void Keysniffer::Emulate(const byte buf[], byte keyType, byte emulRetry) {
 		(buf[3] & 1) ? delayUs(Tj1) : delayUs(Tj0);
 		for (byte retry = 0, bitmask, i; retry < emulRetry; retry++) {
 			pMode(pin_comparator, OUTPUT);
-			delayUs(T.t1);													//sending synchronise bit log 0
+			delayUs(T1);													//sending synchronise bit log 0
 			for (bitmask = 0b100; bitmask; bitmask >>= 1) {
 				writeBitMetakom(METAKOM & bitmask, Tj1, Tj0);				//sending start nibble
 			}
@@ -358,34 +300,49 @@ void Keysniffer::Emulate(const byte buf[], byte keyType, byte emulRetry) {
 	clearVars();
 }
 
-inline void Keysniffer::writeBitCyfral(bool bit, const byte& Tj1, const byte& Tj0) {
-	pMode(pin_comparator, OUTPUT);	// Start high current consumption	
-	if (bit) {
-		delayUs(T.ti1);
-		pMode(pin_comparator, INPUT);
-		delayUs(Tj1);
-	}
-	else {
-		delayUs(T.ti0);
-		pMode(pin_comparator, INPUT);  // End high current consumption
-		delayUs(Tj0);
-	}
-}
-
-inline void Keysniffer::writeBitMetakom(bool bit, const byte& Tj1, const byte& Tj0) {
+void Keysniffer::writeBitCyfral(bool bit, const byte& Tj1, const byte& Tj0) {
+	pMode(pin_comparator, OUTPUT);		// Start high current consumption	
+	delayUs(bit ? Ti1 : Ti0);
 	pMode(pin_comparator, INPUT);		// End high current consumption
-	if (bit) {
-		delayUs(T.ti1);
-		pMode(pin_comparator, OUTPUT);
-		delayUs(Tj1);
-	}
-	else {
-		delayUs(T.ti0);
-		pMode(pin_comparator, OUTPUT);  // Start high current consumption
-		delayUs(Tj0);
-	}
+	delayUs(bit ? Tj1 : Tj0);
 }
 
-inline void Keysniffer::clearVars() {
-	memset(&T, 0, sizeof(T));
+void Keysniffer::writeBitMetakom(bool bit, const byte& Tj1, const byte& Tj0) {
+	pMode(pin_comparator, INPUT);		// End high current consumption
+	delayUs(bit ? Ti1 : Ti0);
+	pMode(pin_comparator, OUTPUT);		// Start high current consumption
+	delayUs(bit ? Tj1 : Tj0);
 }
+
+void Keysniffer::clearVars() {
+	T0 = T1 = Ti0 = Ti1 = 0;
+}
+
+/*
+bool Keysniffer::comparator() {
+	static byte iterator = WAIT_RETRY_COUNT;
+	byte old_iterator = 0;
+	for (;;) {
+		while (COMP) {
+			if (iterator) {
+				iterator--;
+			}
+			else {//dWrite(5, 0);
+				return false;
+			}
+		}
+		old_iterator = iterator;
+		while (!COMP) {
+			if (iterator < WAIT_RETRY_COUNT) {
+				iterator++;
+			}
+			else {//dWrite(5, 1);
+				return true;
+			}
+		}
+		register char temp = (iterator - (iterator - old_iterator) * 2) - 1;
+		if (temp < 1) { iterator = 0;  return false; }
+		else iterator = temp;
+
+	}
+}*/
