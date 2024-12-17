@@ -30,7 +30,7 @@ Keysniffer::Keysniffer() {
 bool Keysniffer::KeyDetection(byte(&buf)[SIZE]) {
 	register byte startNibble, bitmask;
 	word startPeriod;
-	dword tempVoltage, timer;
+	dword tempVoltage; decltype(uS) timer;
 	while (!flagInterrupt) {
 #ifdef VOLTAGE_MEASURING
 		if (flagAdcFirstConv) {//DEBUG(adc()); continue;
@@ -142,15 +142,17 @@ last_bit:
 }
 
 bool Keysniffer::recvBitMetakom() {
-	dword timer = uS;
+	auto timer = uS;
+	decltype(timer) t;
 	while (comparator()) {
 		if (uS - timer > 200) {
 			error = ERROR_DUTY_HIGH_METAKOM;
 			return false;
 		}
 	}
-	dutyHigh = uS - timer;
-	timer = uS;
+	t = uS;
+	dutyHigh = t - timer;
+	timer = t;
 	while (!comparator()) {
 		if (uS - timer > 160) {
 			dutyLow = 160;		//may be synchronise bit
@@ -204,7 +206,7 @@ again:
 }
 
 bool Keysniffer::recvBitCyfral() {
-	dword timer = uS;
+	auto timer = uS;
 	while (!comparator()) {
 		if (uS - timer > 160) {
 			error = ERROR_DUTY_LOW_CYFRAL;
