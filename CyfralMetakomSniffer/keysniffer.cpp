@@ -101,7 +101,7 @@ bool Keysniffer::KeyDetection(byte(&buf)[SIZE]) {
 }
 
 bool Keysniffer::Metakom(byte(&buf)[SIZE]) {
-	register byte count1 = 0, count0 = 0, parity = 0, i, BYTE, bitmask;
+	register byte count1 = 0, count0 = 0, i, BYTE, bitmask;
 	for (i = 0; i < 4; i++) {
 		for (BYTE = 0, bitmask = 128; bitmask; bitmask >>= 1) {
 			if (recvBitMetakom()) {
@@ -110,12 +110,11 @@ last_bit:
 				T1 += period;
 				Ti1 += dutyHigh;
 				count1++;
-				parity ^= 1;
 			}
 			else {
 				if (error) {
 					if ((bitmask == 1) && (i == 3)) {
-						if (parity) goto last_bit;
+						if (dutyHigh > (period >> 1)) goto last_bit;
 					}
 					else return false;
 				}
@@ -124,7 +123,7 @@ last_bit:
 				count0++;
 			}
 		}
-		if (parity) {
+		if (count1 & 1) {
 			error = ERROR_PARITY_METAKOM;
 			return false;
 		}
@@ -154,9 +153,9 @@ bool Keysniffer::recvBitMetakom() {
 	timer = uS;
 	while (!comparator()) {
 		if (uS - timer > 160) {
-			dutyLow = 160;
+			dutyLow = 160;		//may be synchronise bit
 			error = ERROR_DUTY_LOW_METAKOM;
-			return false;		//may be synchronise bit
+			return false;		
 		}
 	}
 	dutyLow = uS - timer;
@@ -313,11 +312,6 @@ void Keysniffer::writeBitMetakom(bool bit, const byte& Tj1, const byte& Tj0) {
 	pMode(pin_comparator, OUTPUT);		// Start high current consumption
 	delayUs(bit ? Tj1 : Tj0);
 }
-
-void Keysniffer::clearVars() {
-	T0 = T1 = Ti0 = Ti1 = 0;
-}
-
 /*
 bool Keysniffer::comparator() {
 	static byte iterator = WAIT_RETRY_COUNT;
