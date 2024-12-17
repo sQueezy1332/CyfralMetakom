@@ -30,7 +30,7 @@ Keysniffer::Keysniffer() {
 bool Keysniffer::KeyDetection(byte(&buf)[SIZE]) {
 	register byte startNibble, bitmask;
 	word startPeriod;
-	dword tempVoltage; decltype(uS) timer;
+	dword tempVoltage;decltype(uS) timer;
 	while (!flagInterrupt) {
 #ifdef VOLTAGE_MEASURING
 		if (flagAdcFirstConv) {//DEBUG(adc()); continue;
@@ -69,7 +69,7 @@ bool Keysniffer::KeyDetection(byte(&buf)[SIZE]) {
 				goto Start;
 			} 
 		}
-		startPeriod = uS - timer + dutyLow;
+		startPeriod = uS - timer + dutySecond;
 		for (bitmask = 0b100, startNibble = 0; bitmask; bitmask >>= 1) {
 			if (recvBitMetakom())
 				startNibble |= bitmask;
@@ -88,7 +88,7 @@ bool Keysniffer::KeyDetection(byte(&buf)[SIZE]) {
 				goto Start;
 			}
 		}
-		if ((uS - timer) > dutyLow || recvBitCyfral()) {  //duty low from previos read bit Metakom or b0_0001
+		if ((uS - timer) > dutySecond || !recvBitMetakom(false)) {  //duty low from previos read bit Metakom or b0_0001
 			if (Cyfral(buf))
 				return CYFRAL;
 			DEBUG(error);
@@ -104,22 +104,22 @@ bool Keysniffer::Metakom(byte(&buf)[SIZE]) {
 	register byte count1 = 0, count0 = 0, i, BYTE, bitmask;
 	for (i = 0; i < 4; i++) {
 		for (BYTE = 0, bitmask = 128; bitmask; bitmask >>= 1) {
-			if (recvBitMetakom()) {
+			if (recvBitMetakom(true)) {
 last_bit:
 				BYTE |= bitmask;
 				T1 += period;
-				Ti1 += dutyHigh;
+				Ti1 += dutyFirst;
 				count1++;
 			}
 			else {
 				if (error) {
 					if ((bitmask == 1) && (i == 3)) {
-						if (dutyHigh > (period >> 1)) goto last_bit;
+						if (dutyFirst > (period >> 1)) goto last_bit;
 					}
 					else return false;
 				}
 				T0 += period;
-				Ti0 += dutyHigh;
+				Ti0 += dutyFirst;
 				count0++;
 			}
 		}
@@ -141,46 +141,46 @@ last_bit:
 	return true;
 }
 
-bool Keysniffer::recvBitMetakom() {
+bool Keysniffer::recvBitMetakom(const bool state) {
 	auto timer = uS;
 	decltype(timer) t;
-	while (comparator()) {
+	while (comparator() == state) {
 		if (uS - timer > 200) {
 			error = ERROR_DUTY_HIGH_METAKOM;
 			return false;
 		}
 	}
 	t = uS;
-	dutyHigh = t - timer;
+	dutyFirst = t - timer;
 	timer = t;
-	while (!comparator()) {
+	while (comparator() == !state) {
 		if (uS - timer > 160) {
-			dutyLow = 160;		//may be synchronise bit
+			dutySecond = 160;		//may be synchronise bit
 			error = ERROR_DUTY_LOW_METAKOM;
 			return false;		
 		}
 	}
-	dutyLow = uS - timer;
-	if ((period = dutyLow + dutyHigh) < 50) {
+	dutySecond = uS - timer;
+	if ((period = dutySecond + dutyFirst) < 50) {
 		error = ERROR_PERIOD_METAKOM;
 		return false;
 	}
-	return (dutyHigh > dutyLow);
+	return (dutyFirst > dutySecond);
 }
 
 bool Keysniffer::Cyfral(byte (&buf)[SIZE]) {
 again:
 	for(byte i = 0, nibble = 0, bitmask; i < 4;++i) {
 		for (bitmask = 0b1000; bitmask; bitmask >>= 1) {
-			if (recvBitCyfral()) {
+			if (!recvBitMetakom(false)) {
 				nibble |= bitmask;
 				T1 += period;
-				Ti1 += dutyLow;
+				Ti1 += dutyFirst;
+				if (error) return false;
 			}
 			else {
-				if (error) return false;
 				T0 += period;
-				Ti0 += dutyLow;
+				Ti0 += dutyFirst;
 			}
 		} //Serial.println(nibble, HEX);
 		switch (nibble & 0xF) {
@@ -205,29 +205,6 @@ again:
 	return true;
 }
 
-bool Keysniffer::recvBitCyfral() {
-	auto timer = uS;
-	while (!comparator()) {
-		if (uS - timer > 160) {
-			error = ERROR_DUTY_LOW_CYFRAL;
-			return false;
-		}
-	}
-	dutyLow = uS - timer;
-	timer = uS;
-	while (comparator()) {
-		if (uS - timer > 200) {
-			error = ERROR_DUTY_HIGH_CYFRAL;
-			return false;
-		}
-	}
-	dutyHigh = uS - timer;
-	if ((period = uS - timer) < 50) {
-		error = ERROR_PERIOD_CYFRAL;
-		return false;
-	}
-	return (dutyHigh > dutyLow);
-}
 bool Keysniffer::comparator() {
 	static byte prev_state = COMP;
 	byte state = COMP;
@@ -314,6 +291,31 @@ void Keysniffer::writeBitMetakom(bool bit, const byte& Tj1, const byte& Tj0) {
 	pMode(pin_comparator, OUTPUT);		// Start high current consumption
 	delayUs(bit ? Tj1 : Tj0);
 }
+/*
+bool Keysniffer::recvBitCyfral() {
+	auto timer = uS;
+	decltype(timer) t;
+	while (!comparator()) {
+		if (uS - timer > 160) {
+			error = ERROR_DUTY_LOW_CYFRAL;
+			return false;
+		}
+	}
+	dutyFirst = t - timer;
+	timer = t;
+	while (comparator()) {
+		if (uS - timer > 200) {
+			error = ERROR_DUTY_HIGH_CYFRAL;
+			return false;
+		}
+	}
+	dutyFirst = uS - timer;
+	if ((period = uS - timer) < 50) {
+		error = ERROR_PERIOD_CYFRAL;
+		return false;
+	}
+	return (dutyFirst > dutySecond);
+}*/
 /*
 bool Keysniffer::comparator() {
 	static byte iterator = WAIT_RETRY_COUNT;
