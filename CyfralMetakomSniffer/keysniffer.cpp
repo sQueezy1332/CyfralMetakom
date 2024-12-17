@@ -50,11 +50,11 @@ bool Keysniffer::KeyDetection(byte(&buf)[SIZE]) {
 		}
 #endif // VOLTAGE_MEASURING
 	Start:
+		if (comparator()) { continue; } //wait until high signal is start
+		timer = uS;
+		wdr;
 		error = NO_ERROR;
 		clearVars();
-		if (comparator()) { continue; } //wait until high signal is start
-		timer = uS;		
-		wdr;
 		while (!comparator()) {			//Try read METAKOM synchronise bit log 0
 			if (uS - timer > 450) {		//50 - 230 datasheet ~450 for last bit + synchro
 				timer = mS + 200;
@@ -192,6 +192,7 @@ again:
 			nibble <<= 4;
 			continue;
 		case 0x1:
+			clearVars();
 			goto again;
 		default:
 			error = ERROR_NIBBLE_CYFRAL;
