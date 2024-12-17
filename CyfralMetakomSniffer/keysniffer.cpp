@@ -147,7 +147,7 @@ bool Keysniffer::recvBitMetakom(const bool state) {
 	while (comparator() == state) {
 		if (uS - timer > 200) {
 			error = ERROR_DUTY_HIGH_METAKOM;
-			return !state;
+			return false;
 		}
 	}
 	t = uS;
@@ -157,28 +157,29 @@ bool Keysniffer::recvBitMetakom(const bool state) {
 		if (uS - timer > 160) {
 			dutySecond = 160;		//may be synchronise bit
 			error = ERROR_DUTY_LOW_METAKOM;
-			return !state;
+			return false;
 		}
 	}
 	dutySecond = uS - timer;
 	if ((period = dutySecond + dutyFirst) < 50) {
 		error = ERROR_PERIOD_METAKOM;
-		return !state;
+		return false;
 	}
-	return (dutyFirst > dutySecond);
+	if (state) return (dutyFirst > dutySecond);
+	return (dutyFirst < dutySecond);
 }
 
 bool Keysniffer::Cyfral(byte (&buf)[SIZE]) {
 again:
 	for(byte i = 0, nibble = 0, bitmask; i < 4;++i) {
 		for (bitmask = 0b1000; bitmask; bitmask >>= 1) {
-			if (!recvBitMetakom(false)) {
+			if (recvBitMetakom(false)) {
 				nibble |= bitmask;
 				T1 += period;
 				Ti1 += dutyFirst;
-				if (error) return false;
 			}
 			else {
+				if (error) return false;
 				T0 += period;
 				Ti0 += dutyFirst;
 			}
