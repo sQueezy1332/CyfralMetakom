@@ -147,7 +147,7 @@ bool Keysniffer::recvBitMetakom(const bool state) {
 	while (comparator() == state) {
 		if (uS - timer > 200) {
 			error = ERROR_DUTY_HIGH_METAKOM;
-			return false;
+			return !state;
 		}
 	}
 	t = uS;
@@ -157,13 +157,13 @@ bool Keysniffer::recvBitMetakom(const bool state) {
 		if (uS - timer > 160) {
 			dutySecond = 160;		//may be synchronise bit
 			error = ERROR_DUTY_LOW_METAKOM;
-			return false;		
+			return !state;
 		}
 	}
 	dutySecond = uS - timer;
 	if ((period = dutySecond + dutyFirst) < 50) {
 		error = ERROR_PERIOD_METAKOM;
-		return false;
+		return !state;
 	}
 	return (dutyFirst > dutySecond);
 }
