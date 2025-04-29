@@ -97,8 +97,8 @@ public:
 	} err_t;
 	err_t error;
 protected:
-	//bool recvBitCyfral();
-	bool recvBitMetakom(const bool state = true);
+	bool recvBitMetakom();
+	bool recvBitCyfral();
 	void writeBitCyfral(bool bit, const byte& Tj1, const byte& Tj0);
 	void writeBitMetakom(bool bit, const byte& Tj1, const byte& Tj0);
 	WEAK virtual bool comparator();
