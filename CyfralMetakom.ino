@@ -19,7 +19,7 @@ void setup()
 	firstStart();
 	//clearMemory(); while (1);
 	//getfromeeprom(); printkeys(); while (1);	//debug
-	initSIM(); 
+	initSIM();
 	/*DEBUG(readByte(writedKeysByte));
 	DEBUG(readByte(voltagekeyWritedbyte));
 	DEBUG(ADMUX);
@@ -72,8 +72,8 @@ again:
 				sendKeys(writedKeys);
 				break;
 			case READDISABLE:
-				if (millis() > timestamp) break;
-				else  continue;
+				if (millis() < timestamp) continue;
+				break;
 			case ZERO: 	//error //DEBUG(); DEBUG(F("\t def")); DEBUG(flagSmsNotsended); DEBUG();
 				flagSmsNotsended |= (obj.error << 4);
 				continue;
@@ -88,7 +88,7 @@ again:
 	flagSmsNotsended |= 1;  //debug
 }
 void HandleCall() {
-	cbi(WDTCSR, WDIE); 
+	cbi(WDTCSR, WDIE);
 	if (strstr(waitResponse(), PHONE_NUMBER_1) || strstr(respBuf, PHONE_NUMBER_2)) {
 		sendAT("ATA");
 		char* colonIndex;
@@ -97,8 +97,7 @@ void HandleCall() {
 		while (millis() - timer < 10000) {
 			if ((colonIndex = strchr(waitResponse(), ':'))) {
 				timer = millis();
-				switch (colonIndex[2]) {
-				case '*': {
+				if (colonIndex[2] == '*') {
 					if ((colonIndex = strchr(waitResponse(), ':')) != NULL) {
 						timer = millis();
 						switch (colonIndex[2]) {
@@ -122,15 +121,13 @@ void HandleCall() {
 						default: goto exit;
 						}
 					}	continue;
-				}
-				case '#': {
+				} else if (colonIndex[2] == '#') {
 					if (strchr(waitResponse(2), '*')) {
 						if (strchr(waitResponse(2), '#'))
 							if (strchr(waitResponse(2), '*'))
 								clearMemory();
-					}
-				}	goto exit;
-				default:
+					} else goto exit;
+				} else {
 					keyid = atoi(colonIndex + 2);
 					if (keyid > writedKeys || keyid == 0) continue;
 					keyid--;
@@ -142,8 +139,7 @@ void HandleCall() {
 						emulateKeys(keyid, keyType);
 						timer = millis();
 					}
-				}
-				else continue;
+				} else continue;
 			}
 		}
 	}
@@ -157,8 +153,7 @@ void sendKeys(const byte& keysAmount) {
 	if (!SendSms(kArray, SEND_SMS_PHONE, vArray, keysAmount, voltagekeyWrited)) {
 		flagSmsNotsended |= 1;
 		timestamp = millis() + (15 * 60 * 1000ul);
-	}
-	else flagSmsNotsended = 0; DEBUG(flagSmsNotsended);
+	} else flagSmsNotsended = 0; DEBUG(flagSmsNotsended);
 	writeByte(smsNotsendedByte, flagSmsNotsended);
 	clearArray();
 	sbi(WDTCSR, WDIE);
@@ -170,8 +165,7 @@ void emulateKeys(byte keyNO, byte keyType) {
 	memset(kArray[0], 0, keylen);
 }
 void sortingArray() {
-	register byte next = 0;
-	for (byte first = 0; first < keyReaded; first++) {
+	for (byte first = 0, second, next = 0; first < keyReaded; first++) {
 		if (kArray[first][4] == 0) {
 			for (; next < keyReaded; next++) {
 				if (kArray[next][4]) {
@@ -184,7 +178,7 @@ void sortingArray() {
 				return;
 			}
 		}
-		for (byte second = ++next; second < keyReaded; second++) {
+		for (second = ++next; second < keyReaded; second++) {
 			if (kArray[second][4] == 0) continue;
 			if (!memcmp(kArray[first], kArray[second], 4))
 				memset(kArray[second], 0, keylen);
@@ -192,34 +186,32 @@ void sortingArray() {
 	}
 }
 void writeKeys() {
-	byte match;
-	const byte oldWritedKeys = writedKeys;
+	const auto oldWritedKeys = writedKeys;
 	if (oldWritedKeys == 0) {
-		for (byte i = 0; i < keyReaded && writedKeys < limitKeys; i++)
-			writeKey(writedKeys++, kArray[i]);
-		goto skip;
-	}
-	for (byte first = 0; first < keyReaded && writedKeys < limitKeys; first++) {
-		for (byte block = 0; block < oldWritedKeys; block++) {  // checking for key not exist in eeprom
-			for (match = 0; match < 4; match++) {
-				if (kArray[first][match] != readByte(block * keylen + match)) break;
+		for (byte i = 0; i < keyReaded && writedKeys < limitKeys; i++) writeKey(writedKeys++, kArray[i]);
+	} else {
+		for (byte key_n = 0, block, i; key_n < keyReaded && writedKeys < limitKeys; key_n++) {
+			for (block = 0; block < oldWritedKeys; block++) {  // checking for key not exist in eeprom
+				for (i = 0;;) {
+					if (kArray[key_n][i] != readByte(block * keylen + i)) break;
+					if (++i == 4) goto next; //already exist in eeprom
+				}
 			}
-			if (match == 4) break;      //already exist in eeprom
+			DEBUG(F("\t\tWRITE"));
+			writeKey(writedKeys++, kArray[key_n]);
+		next:continue;
 		}
-		if (match == 4) continue;
-		DEBUG(F("\t\tWRITE"));
-		writeKey(writedKeys++, kArray[first]);
 	}
-	skip:
-	if (writedKeys > oldWritedKeys) writeByte(writedKeysByte, writedKeys);
+	if (writedKeys > oldWritedKeys)
+		writeByte(writedKeysByte, writedKeys);
 	if (avgVoltage < adcMaxValue && voltagekeyWrited < limitKeys) {
 		const word voltageLastbyte = voltageFirstbyte + voltagekeyWrited * 2;
-		if (voltagekeyWrited == 0) goto exit;
-		for (word tempAdc, i = voltageFirstbyte; i < voltageLastbyte; i += 2) {
-			readBlock(i, tempAdc);
-			if (avgVoltage == tempAdc) return;
+		if (voltagekeyWrited != 0) {
+			for (word tempAdc, i = voltageFirstbyte; i < voltageLastbyte; i += 2) {
+				readBlock(i, tempAdc);
+				if (avgVoltage == tempAdc) return;  //already exist
+			}
 		}
-	exit:
 		writeBlock(voltageLastbyte, avgVoltage);
 		writeByte(voltagekeyWritedbyte, ++voltagekeyWrited);
 	}
@@ -265,10 +257,10 @@ void printkeys() {
 	}
 	if (vArray != nullptr) {
 		Serial.print(F("volKeysAmount = ")); Serial.println(voltagekeyWrited);
-		Serial.print(F("\t  V\t\t  Ω\t\tDx\n")); 
+		Serial.print(F("\t  V\t\t  Ω\t\tDx\n"));
 		float temp;
 		for (byte i = 0; i < voltagekeyWrited; i++) {
-			if(vArray[i] > 3500) continue;	//debug
+			if (vArray[i] > 3500) continue;	//debug
 			Serial.print(i + 1); Serial.print('\t');
 			Serial.print(temp = ConvAdcToVolts(vArray[i]), 3);  Serial.print('\t'); Serial.print('\t');
 			Serial.print(temp = CalcResistance(temp), 0); Serial.print('\t'); Serial.print('\t');
@@ -294,8 +286,7 @@ void firstStart() {
 		writeByte(writedKeysByte, 0);
 		writeByte(smsNotsendedByte, 0);
 		writeByte(voltagekeyWritedbyte, 0);
-	}
-	else { //writeByte((0x300 - 1), 0xff); 
+	} else { //writeByte((0x300 - 1), 0xff); 
 		writedKeys = readByte(writedKeysByte);
 		flagSmsNotsended = readByte(smsNotsendedByte);
 		voltagekeyWrited = readByte(voltagekeyWritedbyte);
