@@ -92,8 +92,7 @@ void HandleCall() {
 	if (strstr(waitResponse(), PHONE_NUMBER_1) || strstr(respBuf, PHONE_NUMBER_2)) {
 		sendAT("ATA");
 		char* colonIndex;
-		byte keyid = 0;
-		byte keyType = 0;
+		byte keyid = 0, keyType = 0;
 		dword timer = millis();
 		while (millis() - timer < 10000) {
 			if ((colonIndex = strchr(waitResponse(), ':'))) {
