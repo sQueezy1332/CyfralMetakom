@@ -186,7 +186,7 @@ void sortingArray() {
 	}
 }
 void writeKeys() {
-	const auto oldWritedKeys = writedKeys;
+	const byte oldWritedKeys = writedKeys;
 	if (oldWritedKeys == 0) {
 		for (byte i = 0; i < keyReaded && writedKeys < limitKeys; i++) writeKey(writedKeys++, kArray[i]);
 	} else {
@@ -199,7 +199,7 @@ void writeKeys() {
 			}
 			DEBUG(F("\t\tWRITE"));
 			writeKey(writedKeys++, kArray[key_n]);
-		next:continue;
+next:continue;
 		}
 	}
 	if (writedKeys > oldWritedKeys)
@@ -220,10 +220,8 @@ void clearArray() {
 	memset(kArray, 0, keyReaded * keylen);
 	keyReaded = 0;
 	avgVoltage = adcMaxValue;
-	if (vArray != nullptr) {
-		delete[] vArray;
-		vArray = nullptr;
-	}
+	delete[] vArray;
+	vArray = nullptr;
 }
 void clearMemory() {
 	byte _writedKeys = readByte(writedKeysByte);
@@ -240,7 +238,6 @@ void clearMemory() {
 	flagSmsNotsended = 0;
 	avgVoltage = adcMaxValue;
 	flagAdcFirstConv = true;
-	vArray = nullptr;
 }
 void printkeys() {
 	for (byte i = 0; i < keyReaded; i++) {
@@ -275,8 +272,9 @@ void getfromeeprom() {
 		readKey(i, kArray[i]);
 	if (voltagekeyWrited) {
 		vArray = new word[voltagekeyWrited];
-		for (byte i = 0; i < voltagekeyWrited; i++)
-			readBlock(voltageFirstbyte + (i * 2), vArray[i]);
+		if (vArray)
+			for (byte i = 0; i < voltagekeyWrited; i++)
+				readBlock(voltageFirstbyte + (i * 2), vArray[i]);
 	}
 	keyReaded = writedKeys;
 }
