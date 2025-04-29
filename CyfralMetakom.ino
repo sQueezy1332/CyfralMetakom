@@ -98,11 +98,11 @@ void HandleCall() {
 		while (millis() - timer < 10000) {
 			if ((colonIndex = strchr(waitResponse(), ':'))) {
 				timer = millis();
-				switch (*(colonIndex + 2)) {
+				switch (colonIndex[2]) {
 				case '*': {
-					if ((colonIndex = strchr(waitResponse(), ':'))) {
+					if ((colonIndex = strchr(waitResponse(), ':')) != NULL) {
 						timer = millis();
-						switch (*(colonIndex + 2)) {
+						switch (colonIndex[2]) {
 						case '*':
 							sendAT("ATH");
 							getfromeeprom();
