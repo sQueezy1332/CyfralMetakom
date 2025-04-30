@@ -170,7 +170,8 @@ void sortingArray() {
 			for (; next < keyReaded; next++) {
 				if (kArray[next][4]) {
 					memcpy(kArray[first], kArray[next], keylen);
-					memset(kArray[next], 0, keylen); break;
+					memset(kArray[next], 0, keylen); 
+					break;
 				}
 			}
 			if (next == keyReaded) {
@@ -179,9 +180,11 @@ void sortingArray() {
 			}
 		}
 		for (second = ++next; second < keyReaded; second++) {
-			if (kArray[second][4] == 0) continue;
-			if (!memcmp(kArray[first], kArray[second], 4))
-				memset(kArray[second], 0, keylen);
+			if (kArray[second][4]) {
+				//if (!memcmp(kArray[first], kArray[second], 4))
+				if (*(dword*)&kArray[first] == *(dword*)&kArray[second])
+					memset(kArray[second], 0, keylen);
+			}
 		}
 	}
 }
@@ -199,7 +202,7 @@ void writeKeys() {
 			}
 			DEBUG(F("\t\tWRITE"));
 			writeKey(writedKeys++, kArray[key_n]);
-next:continue;
+		next:continue;
 		}
 	}
 	if (writedKeys > oldWritedKeys)
