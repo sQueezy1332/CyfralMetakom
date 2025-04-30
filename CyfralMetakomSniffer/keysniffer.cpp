@@ -238,8 +238,7 @@ bool Keysniffer::comparator() {
 	static byte prev_state = COMP;
 	byte state = COMP;
 	if (state != prev_state) {
-		auto time = micros();
-		while (COMP == state) {
+		for (auto time = micros(); COMP == state; ) {
 			if (micros() - time > DELAY_COMP) {
 				prev_state = state;
 				return state;
