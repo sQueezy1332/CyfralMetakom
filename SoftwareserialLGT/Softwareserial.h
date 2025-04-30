@@ -48,7 +48,7 @@ http://arduiniana.org.
 #endif
 
 #define openDrainMode 1
-#define rxPullUpDisable 1
+#define rxPullUp 0
 #define inverse_logic 0
 
 
