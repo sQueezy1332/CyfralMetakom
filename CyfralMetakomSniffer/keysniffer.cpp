@@ -173,7 +173,7 @@ bool Keysniffer::recvBitCyfral() {
 	decltype(timer) t;
 	while (!comparator()) {
 		if (uS - timer > 200) {
-			error = ERROR_DUTY_HIGH_METAKOM;
+			error = ERROR_DUTY_LOW_CYFRAL;
 			return false;
 		}
 	}
@@ -183,13 +183,13 @@ bool Keysniffer::recvBitCyfral() {
 	while (comparator()) {
 		if (uS - timer > 160) {
 			dutySecond = 160;		//may be synchronise bit
-			error = ERROR_DUTY_LOW_METAKOM;
+			error = ERROR_DUTY_HIGH_CYFRAL;
 			return false;
 		}
 	}
 	dutySecond = uS - timer;
 	if ((period = dutySecond + dutyFirst) < 50) {
-		error = ERROR_PERIOD_METAKOM;
+		error = ERROR_PERIOD_CYFRAL;
 		return false;
 	}
 	return (dutySecond > dutyFirst);
