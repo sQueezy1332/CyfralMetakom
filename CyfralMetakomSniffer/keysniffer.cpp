@@ -181,8 +181,8 @@ bool Keysniffer::recvBitCyfral() {
 	dutyFirst = t - timer;
 	timer = t;
 	while (comparator()) {
-		if (uS - timer > 160) {
-			dutySecond = 160;		//may be synchronise bit
+		if (uS - timer > 200) {
+			dutySecond = 200;
 			error = ERROR_DUTY_HIGH_CYFRAL;
 			return false;
 		}
