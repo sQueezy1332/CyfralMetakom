@@ -108,9 +108,8 @@ protected:
 	word T0 = 0;		// Average full period log 0
 	word Ti1 = 0;		// Interval of first period - dutySecond (Cyfral) or dutyFirst (Metakom) for logical 1
 	word Ti0 = 0;		// Interval of first period - dutySecond (Cyfral) or dutyFirst (Metakom) for logical 0
-#endif // _PERIOD
+#endif // PERIOD_MEASURE
 	byte period = 0;	// Full period
-	byte dutySecond = 0;	// Interval of high current consumption -  log 0
+	byte dutySecond = 0;// Interval of high current consumption -  log 0
 	byte dutyFirst = 0;	// Interval of low current consumption - log 1
 };
-
