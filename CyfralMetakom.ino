@@ -27,7 +27,7 @@ void setup()
 	//for (;;) { Serial.println(ConvAdcToVolts(obj.adc())); delay(100); }
 	ADCSRA = (bit(ADEN) | bit(ADSC) | 0b110);
 	EIMSK |= bit(INT0); EICRA |= bit(ISC01); //debug
-	wdt_enable;
+	wdt_init();
 }
 ISR(INT0_vect) {
 	flagInterrupt = RINGCALL;
@@ -35,11 +35,10 @@ ISR(INT0_vect) {
 ISR(WDT_vect) {
 	if (keyReaded || flagAdcFirstConv == false)
 		flagInterrupt = KEYREADED;
-	else if (flagSmsNotsended && millis() > timestamp)
+	else if (flagSmsNotsended && (mS - timestamp) > period)
 		flagInterrupt = SMSNOTSENDED;
 #ifdef __LGT8FX8P__
-	WDTCSR |= bit(WDIE);
-	wdr;
+	sbi(WDTCSR, WDIE); wdr;
 #endif // __LGT8FX8P__
 }
 
@@ -53,8 +52,8 @@ again:
 		else {
 			switch (flagInterrupt) {
 			case RINGCALL: {	//DEBUG(); DEBUG(F("\t 1")); DEBUG(flagSmsNotsended); DEBUG();0
-				for (dword ringtimestamp = millis() + 150; !digitalRead(PIN_RING);) {
-					if (millis() > ringtimestamp) {
+				for (auto ringtimestamp = mS; !digitalRead(PIN_RING);) {
+					if (mS - ringtimestamp > 150) {
 						HandleCall();
 						if (flagInterrupt == READDISABLE) goto again;
 						break;
@@ -72,7 +71,7 @@ again:
 				sendKeys(writedKeys);
 				break;
 			case READDISABLE:
-				if (millis() < timestamp) continue;
+				if (mS - timestamp < (15 * 60 * 1000ul)) continue;
 				break;
 			case ZERO: 	//error //DEBUG(); DEBUG(F("\t def")); DEBUG(flagSmsNotsended); DEBUG();
 				flagSmsNotsended |= (obj.error << 4);
@@ -88,18 +87,18 @@ again:
 	flagSmsNotsended |= 1;  //debug
 }
 void HandleCall() {
-	cbi(WDTCSR, WDIE);
+	AutoFun <> obj;
 	if (strstr(waitResponse(), PHONE_NUMBER_1) || strstr(respBuf, PHONE_NUMBER_2)) {
 		sendAT("ATA");
 		char* colonIndex;
 		byte keyid = 0, keyType = 0;
-		dword timer = millis();
-		while (millis() - timer < 10000) {
+		auto timer = mS;
+		while (mS - timer < 10000) {
 			if ((colonIndex = strchr(waitResponse(), ':'))) {
-				timer = millis();
+				timer = mS;
 				if (colonIndex[2] == '*') {
 					if ((colonIndex = strchr(waitResponse(), ':')) != NULL) {
-						timer = millis();
+						timer = mS;
 						switch (colonIndex[2]) {
 						case '*':
 							sendAT("ATH");
@@ -108,7 +107,8 @@ void HandleCall() {
 							return;
 						case '#': //SMSDISABLE
 							flagSmsNotsended = 0;
-							timestamp = millis() + (24 * 60 * 60 * 1000ul);
+							period = (24 * 60 * 60 * 1000ul);
+							timestamp = mS;
 							continue;
 						case '1': //SMSENABLE
 							timestamp = 0;
@@ -116,7 +116,8 @@ void HandleCall() {
 						case '0':
 							sendAT("ATH");
 							flagInterrupt = READDISABLE;
-							timestamp = millis() + (15 * 60 * 1000ul);
+							//period = (15 * 60 * 1000ul);
+							timestamp = mS;
 							return;
 						default: goto exit;
 						}
@@ -133,11 +134,11 @@ void HandleCall() {
 					keyid--;
 				}
 				if ((colonIndex = strchr(waitResponse(), ':'))) {
-					timer = millis();
+					timer = mS;
 					keyType = atoi(colonIndex + 2);
 					if (keyType == 2 || keyType == 1) {
 						emulateKeys(keyid, keyType);
-						timer = millis();
+						timer = mS;
 					}
 				} else continue;
 			}
@@ -145,18 +146,17 @@ void HandleCall() {
 	}
 exit:
 	sendAT("ATH");
-	sbi(WDTCSR, WDIE); //DEBUG(); DEBUG(F("\t 111")); DEBUG(flagSmsNotsended); DEBUG();
+	//DEBUG(); DEBUG(F("\t 111")); DEBUG(flagSmsNotsended); DEBUG();
 }
 void sendKeys(const byte& keysAmount) {
-	cbi(WDTCSR, WDIE);
-	DEBUG(F("\tsendkey"));
-	if (!SendSms(kArray, SEND_SMS_PHONE, vArray, keysAmount, voltagekeyWrited)) {
+	AutoFun <>obj;  DEBUG(F("\tsendkey"));
+	if (!SendSms(kArray, ("AT+CMGS=\"+7" SEND_SMS_PHONE "\""), vArray, keysAmount, voltagekeyWrited)) {
 		flagSmsNotsended |= 1;
-		timestamp = millis() + (15 * 60 * 1000ul);
-	} else flagSmsNotsended = 0; DEBUG(flagSmsNotsended);
+		timestamp = millis();
+		period = (15 * 60 * 1000ul);
+	} else { flagSmsNotsended = 0; } DEBUG(flagSmsNotsended);
 	writeByte(smsNotsendedByte, flagSmsNotsended);
 	clearArray();
-	sbi(WDTCSR, WDIE);
 }
 void emulateKeys(byte keyNO, byte keyType) {
 	wdr; //reset watchdog
