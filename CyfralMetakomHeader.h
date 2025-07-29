@@ -4,21 +4,27 @@
 #include <Arduino.h>
 #include <keysniffer.h>
 #include "Sim800.h"
+
+#ifdef __AVR__
+#define wdt_off cbi(WDTCSR, WDIE)
+#define wdt_on	sbi(WDTCSR, WDIE)
 #if defined (__LGT8FX8P__)
 #include <WDT.h>
-#define wdt_enable wdt_ienable(WTO_32S)
+#define wdt_init() wdt_ienable(WTO_32S)
 #define PIN_DATA			14
 #define PIN_COMP			15
 #elif defined __AVR_ATmega328P__
-#define wdt_enable WDTCSR |= _BV(WDCE) | _BV(WDE); WDTCSR = _BV(WDIE) | _BV(WDP3) | _BV(WDP0) // ~8450ms 
+#define wdt_init() WDTCSR |= _BV(WDCE) | _BV(WDE); WDTCSR = _BV(WDIE) | _BV(WDP3) | _BV(WDP0) // ~8450ms 
 #define PIN_DATA			14
 #define PIN_COMP			15
 #define PIN_REF_PULLUP		3
 const byte pin_pullup = PIN_REF_PULLUP;
+#endif // __AVR__
 #elif defined(ESP32)
 #define PIN_DATA			25
 #define	PIN_PULLUP			33
 #endif
+
 #include <EEPROM.h>
 #define LIMIT 100
 #define keylen 8 
@@ -36,8 +42,7 @@ const byte pin_pullup = PIN_REF_PULLUP;
 #define PIN_RING 2
 #define PHONE_NUMBER_1	"9990000000"
 #define PHONE_NUMBER_2	"9990000000"
-#define SEND_SMS_PHONE R"(AT+CMGS="+79990000000")"
-
+#define SEND_SMS_PHONE PHONE_NUMBER_1
 #define ConvAdcToVolts(x)	((x) / (adcMaxValue / refVoltage))
 #define ConstVOLTAGE        4.757
 #define ConstRESISTOR       1454
@@ -45,8 +50,7 @@ const byte pin_pullup = PIN_REF_PULLUP;
 #define ResBA               10000
 #define CalcResistance(v)	((v) / ((ConstVOLTAGE - (v)) / ConstRESISTOR))
 #define CalcDx(r)           int(256 - (float((r) - ResWiper) / ResBA * 256))
-
-	#define DEBUG_ENABLE
+	//#define DEBUG_ENABLE
 #ifdef DEBUG_ENABLE
 #define DEBUG(x) Serial.println(x)
 #else
@@ -66,11 +70,10 @@ enum flags : uint8_t {
 	SMSNOTSENDED,
 	READDISABLE,
 };
+
 volatile byte flagInterrupt = ZERO;
-uint32_t timestamp;
-byte flagSmsNotsended = 0;
-byte writedKeys = 0;
-byte keyReaded = 0;
+uint32_t timestamp, period;
+byte flagSmsNotsended = 0, writedKeys = 0 ,keyReaded = 0;
 
 const byte pin_comparator = PIN_COMP, pin_data = PIN_DATA;
 
@@ -86,3 +89,14 @@ void printkeys();
 void getfromeeprom();
 void firstStart();
 void HandleCall();
+void disable_wdt() { wdt_off; }
+void enable_wdt() { wdt_on; }
+
+template<void(*first)() = disable_wdt, void(*second)() = enable_wdt>
+struct AutoFun {
+	AutoFun() { first(); };
+	~AutoFun() { second(); };
+	AutoFun(const AutoFun&) = delete;
+	AutoFun& operator=(const AutoFun&) = delete;
+};
+
