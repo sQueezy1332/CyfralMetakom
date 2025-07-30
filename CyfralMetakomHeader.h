@@ -80,7 +80,7 @@ const byte pin_comparator = PIN_COMP, pin_data = PIN_DATA;
 Keysniffer obj;
 byte kArray[LIMIT][keylen] {};
 void emulateKeys(byte keyNO, byte keyType);
-void sortingArray();
+void sortingArray(byte (&buf)[LIMIT][keylen] = kArray, byte& count = keyReaded);
 void writeKeys();
 void sendKeys(const byte&);
 void clearArray();
