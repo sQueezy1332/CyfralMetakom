@@ -45,7 +45,7 @@ ISR(WDT_vect) {
 void loop()
 {
 again:
-	while (keyReaded < LIMIT) {
+	while (keyReaded < kLIMIT) {
 		if (obj.KeyDetection(kArray[keyReaded])) {
 			keyReaded++; DEBUG(keyReaded);
 		}//else if (obj.error) DEBUG(obj.error);
@@ -165,7 +165,7 @@ void emulateKeys(byte keyNO, byte keyType) {
 	memset(kArray[0], 0, keylen);
 }
 
-void sortingArray(byte (&buf)[LIMIT][keylen], byte& count) {
+void sortingArray(byte (&buf)[kLIMIT][keylen], byte& count) {
 	byte first = 0, second, i = 0;
 	for (; i < count; first++) {
 		if (buf[first][4] == 0) {
@@ -190,9 +190,9 @@ void sortingArray(byte (&buf)[LIMIT][keylen], byte& count) {
 void writeKeys() {
 	const byte oldWritedKeys = writedKeys;
 	if (oldWritedKeys == 0) {
-		for (byte i = 0; i < keyReaded && writedKeys < limitKeys; i++) writeKey(writedKeys++, kArray[i]);
+		for (byte i = 0; i < keyReaded && writedKeys < limitMem; i++) writeKey(writedKeys++, kArray[i]);
 	} else {
-		for (byte key_n = 0, block, i; key_n < keyReaded && writedKeys < limitKeys; key_n++) {
+		for (byte key_n = 0, block, i; key_n < keyReaded && writedKeys < limitMem; key_n++) {
 			for (block = 0; block < oldWritedKeys; block++) {  // checking for key not exist in eeprom
 				for (i = 0;;) {
 					if (kArray[key_n][i] != readByte(block * keylen + i)) break;
@@ -206,7 +206,7 @@ void writeKeys() {
 	}
 	if (writedKeys > oldWritedKeys)
 		writeByte(writedKeysByte, writedKeys);
-	if (avgVoltage < adcMaxValue && voltagekeyWrited < limitKeys) {
+	if (avgVoltage < adcMaxValue && voltagekeyWrited < limitMem) {
 		const word voltageLastbyte = voltageFirstbyte + voltagekeyWrited * 2;
 		if (voltagekeyWrited != 0) {
 			for (word tempAdc, i = voltageFirstbyte; i < voltageLastbyte; i += 2) {
