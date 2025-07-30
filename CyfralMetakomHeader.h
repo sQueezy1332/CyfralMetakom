@@ -28,7 +28,7 @@ const byte pin_pullup = PIN_REF_PULLUP;
 #include <EEPROM.h>
 #define kLIMIT 100
 #define keylen 8 
-#define limitMem 100	//(E2END/keylen) //127 
+#define limitMem kLIMIT	//(E2END/keylen) //127 
 #define voltageFirstbyte (limitMem * keylen)
 #define writedKeysByte (E2END)
 #define smsNotsendedByte  (E2END - 1)
