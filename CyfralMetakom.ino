@@ -164,30 +164,29 @@ void emulateKeys(byte keyNO, byte keyType) {
 	obj.Emulate(kArray[0], keyType, 100);
 	memset(kArray[0], 0, keylen);
 }
-void sortingArray() {
-	for (byte first = 0, second, next = 0; first < keyReaded; first++) {
-		if (kArray[first][4] == 0) {
-			for (; next < keyReaded; next++) {
-				if (kArray[next][4]) {
-					memcpy(kArray[first], kArray[next], keylen);
-					memset(kArray[next], 0, keylen); 
+
+void sortingArray(byte (&buf)[LIMIT][keylen], byte& count) {
+	byte first = 0, second, i = 0;
+	for (; i < count; first++) {
+		if (buf[first][4] == 0) {
+			while (++i < count) {
+				if (buf[i][4]) {
+					memcpy(buf[first], buf[i], keylen);
+					memset(buf[i], 0, keylen);
 					break;
 				}
 			}
-			if (next == keyReaded) {
-				keyReaded = first;
-				return;
-			}
 		}
-		for (second = ++next; second < keyReaded; second++) {
-			if (kArray[second][4]) {
+		for (second = ++i; second < count; second++) {
+			if (buf[second][4]) {
 				//if (!memcmp(kArray[first], kArray[second], 4))
-				if (*(dword*)&kArray[first] == *(dword*)&kArray[second])
-					memset(kArray[second], 0, keylen);
+				if (*reinterpret_cast<dword*>(&buf[first]) == *reinterpret_cast<dword*>(&buf[second]))
+					memset(buf[second], 0, keylen);
 			}
 		}
 	}
 }
+
 void writeKeys() {
 	const byte oldWritedKeys = writedKeys;
 	if (oldWritedKeys == 0) {
