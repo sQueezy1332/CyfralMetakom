@@ -42,10 +42,10 @@ byte Keysniffer::KeyDetection(byte(&buf)[SIZE]) {
 byte Keysniffer::Metakom(byte buf[SIZE]) {
 	byte count1 = 0, count0 = 0, i, result, bitmask;
 #ifdef PERIOD_MEASURE
-	word T1 = 0;		// Average full period log 1
-	word T0 = 0;		// Average full period log 0
-	word Ti1 = 0;		// Interval of first period for 1
-	word Ti0 = 0;		// Interval of first period for 0
+	size_t T1 = 0;		// Average full period log 1
+	size_t T0 = 0;		// Average full period log 0
+	size_t Ti1 = 0;		// Interval of first period for 1
+	size_t Ti0 = 0;		// Interval of first period for 0
 #endif // PERIOD_MEASURE
 	for (i = 0; i < 4; i++) {
 		for (result = 0, bitmask = 128; bitmask; bitmask >>= 1) {
@@ -135,10 +135,10 @@ byte Keysniffer::recvBitCyfral() {
 byte Keysniffer::Cyfral(byte buf[SIZE]) {
 	again:
 #ifdef PERIOD_MEASURE
-	word T1 = 0;		// Average full period log 1
-	word T0 = 0;		// Average full period log 0
-	word Ti1 = 0;		// Interval of first period - (Cyfral) for 1
-	word Ti0 = 0;		// Interval of first period - (Cyfral) for 0
+	size_t T1 = 0;		// Average full period log 1
+	size_t T0 = 0;		// Average full period log 0
+	size_t Ti1 = 0;		// Interval of first period - (Cyfral) for 1
+	size_t Ti0 = 0;		// Interval of first period - (Cyfral) for 0
 #endif // PERIOD_MEASURE
 	for (byte i = 0, nibble = 0, bitmask; i < 4; ++i) {
 		for (bitmask = 0b1000; bitmask; bitmask >>= 1) {
@@ -177,10 +177,10 @@ byte Keysniffer::Cyfral(byte buf[SIZE]) {
 
 void Keysniffer::Emulate(const byte buf[], byte keyType, byte emulRetry) {
 #ifdef PERIOD_MEASURE
-	word T1 = 0;		// Average full period log 1
-	word T0 = 0;		// Average full period log 0
-	word Ti1 = 0;		// Interval of first period
-	word Ti0 = 0;		// Interval of first period
+	size_t T1 = 0;		// Average full period log 1
+	size_t T0 = 0;		// Average full period log 0
+	size_t Ti1 = 0;		// Interval of first period
+	size_t Ti0 = 0;		// Interval of first period
 #endif // PERIOD_MEASURE
 	if (buf[4] && buf[6]) {
 		T1 = buf[4];
