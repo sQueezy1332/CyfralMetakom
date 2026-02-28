@@ -1,61 +1,66 @@
-/*
+/*!voltage_measure()
  Name:		CyfralMetakom_Test.ino
  Created:	11-Jan-24 00:19:52
  Author:	sQueezy
 
 */
 #include "CyfralMetakomHeader.h"
+
 void setup()
 {
 	//clearMemory();
 #ifdef DEBUG_ENABLE
+	//if (some_dead_fun) some_dead_fun();
 	Serial.begin(115200);
 	pinMode(13, OUTPUT);
-	DEBUG("Ready");
-	Serial.println(__DATE__);
-	Serial.println(__TIME__);
+	DEBUGLN("Ready");
+	DEBUGLN(__TIMESTAMP__);
 #endif
 	//delay(5000);
 	firstStart();
+	init_io();
 	//clearMemory(); while (1);
 	//getfromeeprom(); printkeys(); while (1);	//debug
-	initSIM();
+	
 	/*DEBUG(readByte(writedKeysByte));
 	DEBUG(readByte(voltagekeyWritedbyte));
 	DEBUG(ADMUX);
 	Serial.println(readByte(0x300 - 1), HEX);*/
 	//for (;;) { Serial.println(ConvAdcToVolts(obj.adc())); delay(100); }
 	ADCSRA = (bit(ADEN) | bit(ADSC) | 0b110);
-	EIMSK |= bit(INT0); EICRA |= bit(ISC01); //debug
+	//EIMSK |= bit(INT0); EICRA |= bit(ISC01); //debug
+	//initSIM();
 	wdt_init();
+	pinMode(LED_BUILTIN, OUTPUT);
+	PINB |= _BV(PB5);
 }
 ISR(INT0_vect) {
 	flagInterrupt = RINGCALL;
 }
 ISR(WDT_vect) {
-	if (keyReaded || flagAdcFirstConv == false)
+	if (keyReaded || //flagAdcFirstConv == false)
+		avgVoltage)
 		flagInterrupt = KEYREADED;
 	else if (flagSmsNotsended && (mS - timestamp) > period)
 		flagInterrupt = SMSNOTSENDED;
 #ifdef __LGT8FX8P__
-	sbi(WDTCSR, WDIE); wdr;
+	bitSet(WDTCSR, WDIE); 
+	wdr();
 #endif // __LGT8FX8P__
 }
 
-void loop()
-{
-again:
+void loop() {
 	while (keyReaded < kLIMIT) {
-		if (obj.KeyDetection(kArray[keyReaded])) {
-			keyReaded++; DEBUG(keyReaded);
-		}//else if (obj.error) DEBUG(obj.error);
-		else {
+		if (!voltage_measure()) continue;
+		wdr();
+		if (byte ret = obj.KeyDetection(kArray[keyReaded])) { DEBUG(ret); }
+		else { keyReaded++; DEBUG(keyReaded); }
 			switch (flagInterrupt) {
 			case RINGCALL: {	//DEBUG(); DEBUG(F("\t 1")); DEBUG(flagSmsNotsended); DEBUG();0
 				for (auto ringtimestamp = mS; !digitalRead(PIN_RING);) {
 					if (mS - ringtimestamp > 150) {
 						HandleCall();
-						if (flagInterrupt == READDISABLE) goto again;
+						if (flagInterrupt == READDISABLE) continue;
 						break;
 					}
 				}
@@ -64,7 +69,8 @@ again:
 				sortingArray();
 				writeKeys();
 				clearArray();
-				flagAdcFirstConv = true;
+				avgVoltage = 0;
+				//flagAdcFirstConv = true;
 				//break; //debug
 			case SMSNOTSENDED:   //DEBUG(); DEBUG(F("\t 3")); DEBUG(flagSmsNotsended); DEBUG();
 				getfromeeprom(); //printkeys(); clearArray();
@@ -73,19 +79,20 @@ again:
 			case READDISABLE:
 				if (mS - timestamp < (15 * 60 * 1000ul)) continue;
 				break;
-			case ZERO: 	//error //DEBUG(); DEBUG(F("\t def")); DEBUG(flagSmsNotsended); DEBUG();
-				flagSmsNotsended |= (obj.error << 4);
-				continue;
+			default: continue;
+			//case ZERO: 	//error //DEBUG(); DEBUG(F("\t def")); DEBUG(flagSmsNotsended); DEBUG();
+				/*flagSmsNotsended |= (obj.error << 4);*/
+				
 			}
 			flagInterrupt = ZERO;
-		}
 	}DEBUG(F("\tBREAK"));
 	//printkeys();
 	sortingArray();
 	writeKeys();
 	clearArray();
-	flagSmsNotsended |= 1;  //debug
+	flagSmsNotsended |= 1;
 }
+
 void HandleCall() {
 	AutoFun <> obj;
 	if (strstr(waitResponse(), PHONE_NUMBER_1) || strstr(respBuf, PHONE_NUMBER_2)) {
@@ -148,6 +155,7 @@ exit:
 	sendAT("ATH");
 	//DEBUG(); DEBUG(F("\t 111")); DEBUG(flagSmsNotsended); DEBUG();
 }
+
 void sendKeys(const byte& keysAmount) {
 	AutoFun <>obj;  DEBUG(F("\tsendkey"));
 	if (!SendSms(kArray, ("AT+CMGS=\"+7" SEND_SMS_PHONE "\""), vArray, keysAmount, voltagekeyWrited)) {
@@ -159,10 +167,82 @@ void sendKeys(const byte& keysAmount) {
 	clearArray();
 }
 void emulateKeys(byte keyNO, byte keyType) {
-	wdr; //reset watchdog
+	wdr(); //reset watchdog
 	readKey(keyNO, kArray[0]);
 	obj.Emulate(kArray[0], keyType, 100);
 	memset(kArray[0], 0, keylen);
+}
+
+void init_io() {
+#if defined(__LGT8FX8P__)
+	//C0XR |= bit(C0FEN) | bit(C0FS0);  //filter delay 32us
+	C0SR = bit(C0BG); //comparator enable, DAC output on positive input
+	bitSet(ADCSRB, ACME); //CME00, multiplexer adc on inverse input //A0 default
+	DACON = bit(DACEN) | bit(DAVS1); //DAC enable, internal reference voltage
+	//VCAL = VCAL2; sbi(ADCSRD, REFS1);//2.048v
+	VCAL = VCAL3; bitSet(ADCSRD, REFS2);//4.096v
+	DALR = (compRefVoltage * 256 / refVoltage - 1);
+	//bitSet(DACON, DAOE); //DAC output on pd4  //debug
+#ifdef VOLTAGE_MEASURING
+	ADMUX = ((uint8_t)refVoltage << REFS0 /*| 0b0001*/); //ADCSRD |= (0b10 < IVSEL0); //pc1
+	ADCSRA = (bit(ADEN) | bit(ADSC) | 0b110); //64 prescaler, 500khz 30us
+#endif // VOLTAGE_MEASURING
+	//pMode(5, OUTPUT); dWrite(5, 1);
+#elif defined(__AVR_ATmega328P__)
+	pInit(pin_pullup, OUTPUT); dWrite(pin_pullup, HIGH);
+	ADMUX |= bit(REFS0); //AVCC
+	ADCSRA = bit(ADEN) | bit(ADSC) | 0b110; //adc enable, 64 prescaler, 250khz, 52us //8mhz 1.6us default
+#endif
+#if defined(ARDUINO_ARCH_ESP32)
+	pInit(pin_pullup, INPUT);
+#endif
+	pInit(pin_comparator, INPUT);
+	pInit(pin_data, INPUT);
+}
+
+bool comparator() {
+	static byte prev_state = COMP();
+	const byte state = COMP();
+	if (state != prev_state) {
+		for (auto time = micros(); COMP() == state; ) {
+			if (micros() - time > DELAY_COMP) {
+				prev_state = state;
+				return state;
+			}
+		}
+	}
+	return prev_state;
+}
+
+#if defined VOLTAGE_MEASURING && defined (__AVR__)
+word Kalman() {
+	static word old_kalman = adcMaxValue;
+	ADCSRA |= bit(ADSC);
+	while (ADCSRA & bit(ADSC)) {};
+	return old_kalman = (ADC >> 1) + (old_kalman >> 1) + 1;
+}
+#endif
+
+bool voltage_measure() {
+	if (avgVoltage == 0) {//DEBUG(adc()); continue;
+		size_t tempVoltage;
+		if ((tempVoltage = Kalman()) < adcTriggerValue) {
+			wdr();
+			for (byte i = 0; i < (0xFF >> (8 - adcAvgof)); i++) {
+				tempVoltage += Kalman();
+			}
+			word result = tempVoltage >> adcAvgof;
+			if (result < adcTriggerValue && result > 0) {
+				//flagAdcFirstConv = false;
+				avgVoltage = result;
+				return true;
+			}
+			//DEBUG(avgVoltage); continue; digitalWrite(13, 1);
+		}
+		return false;
+		//else continue;
+	}
+	return true;
 }
 
 void sortingArray(byte (&buf)[kLIMIT][keylen], byte& count) {
@@ -180,7 +260,7 @@ void sortingArray(byte (&buf)[kLIMIT][keylen], byte& count) {
 		for (second = ++i; second < count; second++) {
 			if (buf[second][4]) {
 				//if (!memcmp(kArray[first], kArray[second], 4))
-				if (*reinterpret_cast<dword*>(&buf[first]) == *reinterpret_cast<dword*>(&buf[second]))
+				if (*reinterpret_cast<uint32_t*>(&buf[first]) == *reinterpret_cast<uint32_t*>(&buf[second]))
 					memset(buf[second], 0, keylen);
 			}
 		}
@@ -206,7 +286,7 @@ void writeKeys() {
 	}
 	if (writedKeys > oldWritedKeys)
 		writeByte(writedKeysByte, writedKeys);
-	if (avgVoltage < adcMaxValue && voltagekeyWrited < limitMem) {
+	if (avgVoltage && avgVoltage < adcMaxValue && voltagekeyWrited < limitMem) {
 		const word voltageLastbyte = voltageFirstbyte + voltagekeyWrited * 2;
 		if (voltagekeyWrited != 0) {
 			for (word tempAdc, i = voltageFirstbyte; i < voltageLastbyte; i += 2) {
@@ -218,10 +298,11 @@ void writeKeys() {
 		writeByte(voltagekeyWritedbyte, ++voltagekeyWrited);
 	}
 }
+
 void clearArray() {
 	memset(kArray, 0, keyReaded * keylen);
 	keyReaded = 0;
-	avgVoltage = adcMaxValue;
+	avgVoltage = 0;
 	delete[] vArray;
 	vArray = nullptr;
 }
@@ -238,8 +319,8 @@ void clearMemory() {
 	writedKeys = 0;
 	voltagekeyWrited = 0;
 	flagSmsNotsended = 0;
-	avgVoltage = adcMaxValue;
-	flagAdcFirstConv = true;
+	avgVoltage = 0;
+	//flagAdcFirstConv = true;
 }
 void printkeys() {
 	for (byte i = 0; i < keyReaded; i++) {
@@ -266,7 +347,7 @@ void printkeys() {
 			Serial.println(CalcDx(temp));
 		}
 	}
-	if (!flagAdcFirstConv) { Serial.print("avgVoltage = "); Serial.println(avgVoltage); }
+	if (avgVoltage) { Serial.print("avgVoltage = "); Serial.println(avgVoltage); }
 	Serial.println(); //flagAdcFirstConv = true;//debug
 }
 void getfromeeprom() {
