@@ -196,8 +196,8 @@ void init_io() {
 #if defined(ARDUINO_ARCH_ESP32)
 	pInit(pin_pullup, INPUT);
 #endif
-	pInit(pin_comparator, INPUT);
-	pInit(pin_data, INPUT);
+	pInit(PIN_COMP, INPUT);
+	pInit(PIN_DATA, INPUT);
 }
 
 bool comparator() {
