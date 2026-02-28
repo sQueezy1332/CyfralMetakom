@@ -9,7 +9,7 @@ extern "C" {
 #ifdef __cplusplus
 	}
 #endif
-
+#define PERIOD_MEASURE
 #define uS					micros()
 //#define delayUs(x)			delayMicroseconds(x)
 #define _WEAK __attribute__((weak))
@@ -17,14 +17,7 @@ extern "C" {
 #define likely(x)    __builtin_expect(!!(x), 1)
 #define unlikely(x)  __builtin_expect(!!(x), 0)
 #endif // !unlikely
-
 typedef unsigned char byte;
-#define PERIOD_MEASURE
-#ifdef PERIOD_MEASURE
-#define SIZE 8
-#else
-#define SIZE 4
-#endif // PERIOD_MEASURE
 
 extern void delayUs(size_t);
 extern void emul_low_level();
@@ -35,9 +28,9 @@ class Keysniffer
 {
 public:
 	Keysniffer() { /*init_io();*/ };
-	byte KeyDetection(byte (&buf)[SIZE]);
-	byte Metakom(byte buf[SIZE]);
-	byte Cyfral(byte buf[SIZE]);
+	byte KeyDetection(byte (&buf)[8]);
+	byte Metakom(byte buf[8]);
+	byte Cyfral(byte buf[8]);
 	void Emulate(const byte buf[], byte keyType, byte emulRetry = 10);
 	typedef enum : byte {
 		NO_ERROR = 0,
@@ -66,4 +59,3 @@ protected:
 	byte dutySecond = 0;
 	byte dutyFirst = 0;
 };
-
