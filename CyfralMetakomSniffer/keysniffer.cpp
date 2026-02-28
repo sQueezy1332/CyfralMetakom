@@ -1,211 +1,154 @@
 #include "keysniffer.h"
 
-Keysniffer::Keysniffer() {
-#if defined(__LGT8FX8P__)
-	//C0XR |= bit(C0FEN) | bit(C0FS0);  //filter delay 32us
-	C0SR = bit(C0BG); //comparator enable, DAC output on positive input
-	sbi(ADCSRB, ACME); //CME00, multiplexer adc on inverse input //A0 default
-	DACON = bit(DACEN) | bit(DAVS1); //DAC enable, internal reference voltage
-	//VCAL = VCAL2; sbi(ADCSRD, REFS1);//2.048v
-	VCAL = VCAL3; sbi(ADCSRD, REFS2);//4.096v
-	DALR = (compRefVoltage * 256 / refVoltage - 1);
-	//sbi(DACON, DAOE); //DAC output on pd4  //debug
-#ifdef VOLTAGE_MEASURING
-	ADMUX = ((uint8_t)refVoltage << REFS0 /*| 0b0001*/); //ADCSRD |= (0b10 < IVSEL0); //pc1
-	ADCSRA = (bit(ADEN) | bit(ADSC) | 0b110); //64 prescaler, 500khz 30us
-#endif // VOLTAGE_MEASURING
-	//pMode(5, OUTPUT); dWrite(5, 1);
-#elif defined(__AVR_ATmega328P__)
-	pInit(pin_pullup, OUTPUT); dWrite(pin_pullup, HIGH);
-	ADMUX |= bit(REFS0); //AVCC
-	ADCSRA = bit(ADEN) | bit(ADSC) | 0b110; //adc enable, 64 prescaler, 250khz, 52us //8mhz 1.6us default
-#endif
-#if defined(ARDUINO_ARCH_ESP32)
-	pInit(pin_pullup, INPUT);
-#endif
-	pInit(pin_comparator, INPUT);
-	pInit(pin_data, INPUT);
-}
-
-bool Keysniffer::KeyDetection(byte(&buf)[SIZE]) {
-	register byte startNibble, bitmask;
-	word startPeriod;
-	dword tempVoltage;decltype(uS) timer;
-	while (!flagInterrupt) {
-#ifdef VOLTAGE_MEASURING
-		if (flagAdcFirstConv) {//DEBUG(adc()); continue;
-			if ((tempVoltage = Kalman()) < adcTriggerValue) {
-				wdr;
-				for (byte i = 0; i < (0xFF >> (8 - adcAvgof)); i++) {
-					tempVoltage += Kalman();
+byte Keysniffer::KeyDetection(byte(&buf)[SIZE]) {
+	if (comparator()) { return -1; } //wait until high signal is start
+	auto timer = uS;
+	while (!comparator()) {			//Try read METAKOM synchronise bit log 0
+		if (uS - timer > 450) {		//50 - 230 datasheet ~450 for last bit + synchro
+			timer = mS;
+			while (!comparator()) {
+				if (mS - timer > 200) {
+					return ERROR_VERY_LONG_LOW;
 				}
-				word result = tempVoltage >> adcAvgof;
-				if (result < adcTriggerValue) {
-					flagAdcFirstConv = false;
-					avgVoltage = result;
-				}
-				//DEBUG(avgVoltage); continue; digitalWrite(13, 1);
 			}
-			else continue;
+			return ERROR_SYNC_BIT;
 		}
-#endif // VOLTAGE_MEASURING
-	Start:
-		if (comparator()) { continue; } //wait until high signal is start
-		timer = uS;
-		wdr;
-		error = NO_ERROR;
-		clearVars();
-		while (!comparator()) {			//Try read METAKOM synchronise bit log 0
-			if (uS - timer > 450) {		//50 - 230 datasheet ~450 for last bit + synchro
-				timer = mS + 200;
-				while (!comparator()) {
-					if (mS > timer) {
-						error = ERROR_VERY_LONG_LOW;
-						DEBUG(error);
-						return false;
-					}
-				}
-				//error = ERROR_SYNC_BIT; DEBUG(error);
-				goto Start;
-			} 
-		}
-		startPeriod = uS - timer + dutySecond;
-		for (bitmask = 0b100, startNibble = 0; bitmask; bitmask >>= 1) {
-			if (recvBitMetakom())
-				startNibble |= bitmask;
-			if (startNibble > METAKOM || error)
-				goto Start;
-		}
-		if (startNibble == METAKOM && startPeriod + 5 >= period) {
-			if (Metakom(buf)) return METAKOM;
-			DEBUG(error);
-			continue;
-		}//last bit could be volatile if Cyfral //b000 or b001
-		timer = uS;
-		while (comparator()) {				//wait 1 duty cycle for last half bit start nibble (Cyfral?) 
-			if (uS - timer > 200) {
-				//error = ERROR_START_DUTY_HIGH; DEBUG(error);
-				goto Start;
-			}
-		}
-		if ((uS - timer) > dutySecond || recvBitCyfral()) {  //duty low from previos read bit Metakom or b0_0001
-			if (Cyfral(buf))
-				return CYFRAL;
-			DEBUG(error);
-			continue;
-		}
-		error = ERROR_NOT_RECOGNIZED; DEBUG(error); //continue; //debug
-		return false;
 	}
-	return false;
+	size_t startPeriod = uS - timer + dutySecond;
+	if (recvBitMetakom() == 1) return ERROR_START_NIBBLE; //0b1xx == error
+	byte startNibble = 0;
+	for (byte bitmask = 0b10; bitmask; bitmask >>= 1) {
+		if (byte ret = recvBitMetakom()) {
+			if (unlikely(ret > 1)) return ret;
+			startNibble |= bitmask;
+		}
+	}
+	if (startNibble > METAKOM) return ERROR_START_NIBBLE;
+	if (startNibble == METAKOM && startPeriod + 10 >= period) {
+		return (Metakom(buf));
+	}//last bit could be volatile if Cyfral //b000 or b001
+	timer = uS;
+	while (comparator()) {				//wait 1 duty cycle for last half bit start nibble (Cyfral?) 
+		if (uS - timer > 200) {
+			return ERROR_START_DUTY_HIGH;
+		}
+	}
+	if ((uS - timer) > dutySecond || likely(recvBitCyfral() <= 1)) {  //duty low from previos read bit Metakom or b0_0001
+		return Cyfral(buf);
+	}
+	return ERROR_NOT_RECOGNIZED;
 }
 
-bool Keysniffer::Metakom(byte(&buf)[SIZE]) {
-	register byte count1 = 0, count0 = 0, i, BYTE, bitmask;
+byte Keysniffer::Metakom(byte buf[SIZE]) {
+	byte count1 = 0, count0 = 0, i, result, bitmask;
+#ifdef PERIOD_MEASURE
+	word T1 = 0;		// Average full period log 1
+	word T0 = 0;		// Average full period log 0
+	word Ti1 = 0;		// Interval of first period for 1
+	word Ti0 = 0;		// Interval of first period for 0
+#endif // PERIOD_MEASURE
 	for (i = 0; i < 4; i++) {
-		for (BYTE = 0, bitmask = 128; bitmask; bitmask >>= 1) {
-			if (recvBitMetakom()) {
-last_bit_one:
-				BYTE |= bitmask;
+		for (result = 0, bitmask = 128; bitmask; bitmask >>= 1) {
+			if (byte ret = recvBitMetakom()) {
+				if (unlikely(ret > 1)) {
+					if ((bitmask == 1) && (i == 3)) {
+						if (dutyFirst < (period >> 1)) goto last_bit_zero;
+					}
+					else return ret;
+				}
+				result |= bitmask;
 				T1 += period;
 				Ti1 += dutyFirst;
 				count1++;
 			}
 			else {
-				if (error) {
-					if ((bitmask == 1) && (i == 3)) {
-						if (dutyFirst > (period >> 1)) goto last_bit_one;
-					}
-					else return false;
-				}
+last_bit_zero:
 				T0 += period;
 				Ti0 += dutyFirst;
 				count0++;
 			}
 		}
 		if (count1 & 1) {
-			error = ERROR_PARITY_METAKOM;
-			return false;
+			return ERROR_PARITY_METAKOM;
 		}
-		buf[i] = BYTE;
+		buf[i] = result;
 	}
 	buf[4] = T1 / count1;		// division  for Period 1
 	buf[6] = Ti1 / count1;
 	if (count0) {				//checking for divider not be zero
 		buf[5] = T0 / count0;	// division  for Period 0
 		buf[7] = Ti0 / count0;
-	} else {
+	}
+	else {
 		buf[5] = 0;
 		buf[7] = 0;
 	}
-	return true;
+	return NO_ERROR;
 }
 
-bool Keysniffer::recvBitMetakom() {
+byte Keysniffer::recvBitMetakom() {
 	auto timer = uS;
-	decltype(timer) t;
 	while (comparator()) {
-		if (uS - timer > 200) {
-			error = ERROR_DUTY_HIGH_METAKOM;
-			return false;
-		}
+		if (uS - timer > 200) { return ERROR_DUTY_HIGH_METAKOM; }
 	}
-	t = uS;
+	{ auto t = uS;
 	dutyFirst = t - timer;
-	timer = t;
+	timer = t; }
 	while (!comparator()) {
 		if (uS - timer > 160) {
 			dutySecond = 160;		//may be synchronise bit
-			error = ERROR_DUTY_LOW_METAKOM;
-			return false;
+			return ERROR_DUTY_LOW_METAKOM;
 		}
 	}
 	dutySecond = uS - timer;
-	if ((period = dutySecond + dutyFirst) < 50) {
-		error = ERROR_PERIOD_METAKOM;
-		return false;
-	}
-	return (dutyFirst > dutySecond);
+	size_t _period = dutySecond + dutyFirst;
+	if (_period < 50) { return ERROR_PERIOD_METAKOM; }
+	period = _period;
+	return dutyFirst > dutySecond;
 }
 
-bool Keysniffer::recvBitCyfral() {
+byte Keysniffer::recvBitCyfral() {
 	auto timer = uS;
-	decltype(timer) t;
 	while (!comparator()) {
 		if (uS - timer > 200) {
-			error = ERROR_DUTY_LOW_CYFRAL;
-			return false;
+			return ERROR_DUTY_LOW_CYFRAL;
 		}
 	}
-	t = uS;
+	{ auto t = uS;
 	dutyFirst = t - timer;
-	timer = t;
+	timer = t; }
 	while (comparator()) {
 		if (uS - timer > 200) {
 			dutySecond = 200;
-			error = ERROR_DUTY_HIGH_CYFRAL;
-			return false;
+			return ERROR_DUTY_HIGH_CYFRAL;
 		}
 	}
 	dutySecond = uS - timer;
-	if ((period = dutySecond + dutyFirst) < 50) {
-		error = ERROR_PERIOD_CYFRAL;
-		return false;
+	size_t _period = dutySecond + dutyFirst;
+	if(_period < 50) {
+		return ERROR_PERIOD_CYFRAL;
 	}
-	return (dutySecond > dutyFirst);
+	period = _period;
+	return dutySecond > dutyFirst;
 }
 
-bool Keysniffer::Cyfral(byte (&buf)[SIZE]) {
-again:
-	for(byte i = 0, nibble = 0, bitmask; i < 4;++i) {
+byte Keysniffer::Cyfral(byte buf[SIZE]) {
+	again:
+#ifdef PERIOD_MEASURE
+	word T1 = 0;		// Average full period log 1
+	word T0 = 0;		// Average full period log 0
+	word Ti1 = 0;		// Interval of first period - (Cyfral) for 1
+	word Ti0 = 0;		// Interval of first period - (Cyfral) for 0
+#endif // PERIOD_MEASURE
+	for (byte i = 0, nibble = 0, bitmask; i < 4; ++i) {
 		for (bitmask = 0b1000; bitmask; bitmask >>= 1) {
-			if (recvBitCyfral()) {
+			if (byte ret = recvBitCyfral()) {
+				if (unlikely(ret > 1)) return ret;
 				nibble |= bitmask;
 				T1 += period;
 				Ti1 += dutyFirst;
 			}
 			else {
-				if (error) return false;
 				T0 += period;
 				Ti0 += dutyFirst;
 			}
@@ -220,43 +163,25 @@ again:
 			nibble <<= 4;
 			continue;
 		case 0x1:
-			clearVars();
 			goto again;
 		default:
-			error = ERROR_NIBBLE_CYFRAL;
-			return false;
+			return ERROR_NIBBLE_CYFRAL;
 		}
 	} //fast division by 24 = (65536 / (200 * 32) - 1) * 24 == 221.76; x = (2 ^ 8) / 24 + 1 = 11,66...
 	buf[4] = (T1 * 11) >> 8;
 	buf[6] = (Ti1 * 11) >> 8;
 	buf[5] = T0 >> 3;			// division by 8
 	buf[7] = Ti0 >> 3;
-	return true;
+	return NO_ERROR;
 }
 
-bool Keysniffer::comparator() {
-	static byte prev_state = COMP;
-	byte state = COMP;
-	if (state != prev_state) {
-		for (auto time = micros(); COMP == state; ) {
-			if (micros() - time > DELAY_COMP) {
-				prev_state = state;
-				return state;
-			}
-		}
-	}
-	return prev_state;
-}
-
-#if defined VOLTAGE_MEASURING || defined (__AVR__)
-word Keysniffer::Kalman() {
-	static word old_kalman = adcMaxValue;
-	ADCSRA |= bit(ADSC);
-	while (ADCSRA & bit(ADSC)) {};
-	return old_kalman = (ADC >> 1) + (old_kalman >> 1) + 1;
-}
-#endif
 void Keysniffer::Emulate(const byte buf[], byte keyType, byte emulRetry) {
+#ifdef PERIOD_MEASURE
+	word T1 = 0;		// Average full period log 1
+	word T0 = 0;		// Average full period log 0
+	word Ti1 = 0;		// Interval of first period
+	word Ti0 = 0;		// Interval of first period
+#endif // PERIOD_MEASURE
 	if (buf[4] && buf[6]) {
 		T1 = buf[4];
 		T0 = buf[5];
@@ -270,80 +195,76 @@ void Keysniffer::Emulate(const byte buf[], byte keyType, byte emulRetry) {
 	}
 	const byte Tj1 = T1 - Ti1;
 	const byte Tj0 = T0 - Ti0;
-	EMULATE_HIGH_ON(pin_data);
+	//EMULATE_HIGH_ON(pin_data);
 	switch (keyType) {
 	case CYFRAL: {
 		for (byte retry = 0, bitmask, i; retry < emulRetry; retry++) {
 			for (bitmask = 0b1000; bitmask; bitmask >>= 1) {
-				writeBitCyfral(CYFRAL & bitmask, Tj1, Tj0);					//sending start nibble
+				if (CYFRAL & bitmask) { //sending start nibble
+					writeBitCyfral(Ti1, Tj1);
+				}
+				else {
+					writeBitCyfral(Ti0, Tj0);
+				}
 			}
 			for (i = 0; i < 4; i++) {
-				for (bitmask = 128; bitmask; bitmask >>= 1) {				//reading nibble from MSB
-					writeBitCyfral(buf[i] & bitmask, Tj1, Tj0);
+				for (bitmask = 128; bitmask; bitmask >>= 1) {				//sending nibble from MSB
+					if (buf[i] & bitmask) {
+						writeBitMetakom(Ti1, Tj1);
+					}
+					else {
+						writeBitMetakom(Ti0, Tj0);
+					}
 				}
 			}
 		}	break;
 	}
 	case METAKOM: {
-		pMode(pin_comparator, OUTPUT);										//sending synchronise bit log 0
+		emul_low_level();									//sending synchronise bit log 0
 		(buf[3] & 1) ? delayUs(Tj1) : delayUs(Tj0);
 		for (byte retry = 0, bitmask, i; retry < emulRetry; retry++) {
-			pMode(pin_comparator, OUTPUT);
+			emul_low_level();
 			delayUs(T1);													//sending synchronise bit log 0
 			for (bitmask = 0b100; bitmask; bitmask >>= 1) {
-				writeBitMetakom(METAKOM & bitmask, Tj1, Tj0);				//sending start nibble
+				if (METAKOM & bitmask) { //sending start nibble
+					writeBitMetakom(Ti1, Tj1);
+				}
+				else {
+					writeBitMetakom(Ti0, Tj0);
+				}				
 			}
 			for (i = 0; i < 4; i++) {
 				for (bitmask = 128; bitmask; bitmask >>= 1) {
-					writeBitMetakom(buf[i] & bitmask, Tj1, Tj0);
+					if (buf[i] & bitmask) {
+						writeBitMetakom(Ti1, Tj1);
+					}
+					else {
+						writeBitMetakom(Ti0, Tj0);
+					}
+					
 				}
 			}
 		}
-		pMode(pin_comparator, INPUT);
+		emul_high_level();
 	}
 	}
-	EMULATE_HIGH_OFF(pin_data);
-	clearVars();
+	//EMULATE_HIGH_OFF(pin_data);
 }
 
-void Keysniffer::writeBitCyfral(bool bit, const byte& Tj1, const byte& Tj0) {
-	pMode(pin_comparator, OUTPUT);		// Start high current consumption	
-	delayUs(bit ? Ti1 : Ti0);
-	pMode(pin_comparator, INPUT);		// End high current consumption
-	delayUs(bit ? Tj1 : Tj0);
+void Keysniffer::writeBitCyfral(byte Ti, byte Tj) {
+	emul_low_level();	// Start high current consumption	
+	delayUs(Ti);
+	emul_high_level();		// End high current consumption
+	delayUs(Tj);
 }
 
-void Keysniffer::writeBitMetakom(bool bit, const byte& Tj1, const byte& Tj0) {
-	pMode(pin_comparator, INPUT);		// End high current consumption
-	delayUs(bit ? Ti1 : Ti0);
-	pMode(pin_comparator, OUTPUT);		// Start high current consumption
-	delayUs(bit ? Tj1 : Tj0);
+void Keysniffer::writeBitMetakom(byte Ti, byte Tj) {
+	emul_high_level();		// End high current consumption
+	delayUs(Ti);
+	emul_low_level();		// Start high current consumption
+	delayUs(Tj);
 }
-/*
-bool Keysniffer::recvBitCyfral() {
-	auto timer = uS;
-	decltype(timer) t;
-	while (!comparator()) {
-		if (uS - timer > 160) {
-			error = ERROR_DUTY_LOW_CYFRAL;
-			return false;
-		}
-	}
-	dutyFirst = t - timer;
-	timer = t;
-	while (comparator()) {
-		if (uS - timer > 200) {
-			error = ERROR_DUTY_HIGH_CYFRAL;
-			return false;
-		}
-	}
-	dutyFirst = uS - timer;
-	if ((period = uS - timer) < 50) {
-		error = ERROR_PERIOD_CYFRAL;
-		return false;
-	}
-	return (dutyFirst > dutySecond);
-}*/
+
 /*
 bool Keysniffer::comparator() {
 	static byte iterator = WAIT_RETRY_COUNT;
