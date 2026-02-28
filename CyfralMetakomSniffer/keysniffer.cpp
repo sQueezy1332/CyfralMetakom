@@ -251,14 +251,14 @@ void Keysniffer::Emulate(const byte buf[], byte keyType, byte emulRetry) {
 	//EMULATE_HIGH_OFF(pin_data);
 }
 
-void Keysniffer::writeBitCyfral(byte Ti, byte Tj) {
+void Keysniffer::writeBitCyfral(size_t Ti, size_t Tj) {
 	emul_low_level();	// Start high current consumption	
 	delayUs(Ti);
 	emul_high_level();		// End high current consumption
 	delayUs(Tj);
 }
 
-void Keysniffer::writeBitMetakom(byte Ti, byte Tj) {
+void Keysniffer::writeBitMetakom(size_t Ti, size_t Tj) {
 	emul_high_level();		// End high current consumption
 	delayUs(Ti);
 	emul_low_level();		// Start high current consumption
