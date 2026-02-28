@@ -110,7 +110,7 @@ byte Keysniffer::recvBitMetakom() {
 	}
 	dutySecond = uS - timer;
 	size_t _period = dutySecond + dutyFirst;
-	if (_period < 50) { return ERROR_PERIOD_METAKOM; }
+	if (_period < 60) { return ERROR_PERIOD_METAKOM; }
 	period = _period;
 	return dutyFirst > dutySecond;
 }
@@ -133,7 +133,7 @@ byte Keysniffer::recvBitCyfral() {
 	}
 	dutySecond = uS - timer;
 	size_t _period = dutySecond + dutyFirst;
-	if(_period < 50) {
+	if(_period < 60) {
 		return ERROR_PERIOD_CYFRAL;
 	}
 	period = _period;
