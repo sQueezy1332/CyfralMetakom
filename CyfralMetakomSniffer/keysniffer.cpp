@@ -1,3 +1,6 @@
+#pragma message "Изи кудря"
+//#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+//#pragma GCC diagnostic ignored "-Wmisleading-indentation"
 #include "keysniffer.h"
 
 byte Keysniffer::KeyDetection(byte(&buf)[SIZE]) {
@@ -5,9 +8,9 @@ byte Keysniffer::KeyDetection(byte(&buf)[SIZE]) {
 	auto timer = uS;
 	while (!comparator()) {			//Try read METAKOM synchronise bit log 0
 		if (uS - timer > 450) {		//50 - 230 datasheet ~450 for last bit + synchro
-			timer = mS;
+			timer = uS;
 			while (!comparator()) {
-				if (mS - timer > 200) {
+				if (uS - timer > 200000) {
 					return ERROR_VERY_LONG_LOW;
 				}
 			}
@@ -73,8 +76,13 @@ last_bit_zero:
 		}
 		buf[i] = result;
 	}
-	buf[4] = T1 / count1;		// division  for Period 1
-	buf[6] = Ti1 / count1;
+	if (count1) {
+		buf[4] = T1 / count1;		// division  for Period 1
+		buf[6] = Ti1 / count1;
+	} else {
+		buf[4] = 0;
+		buf[6] = 0;
+	}
 	if (count0) {				//checking for divider not be zero
 		buf[5] = T0 / count0;	// division  for Period 0
 		buf[7] = Ti0 / count0;
