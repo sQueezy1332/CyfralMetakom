@@ -1,7 +1,15 @@
 #pragma once
 #pragma GCC diagnostic ignored "-Woverflow"
 #pragma GCC diagnostic ignored "-Wparentheses"
-#define DEBUG_ENABLE
+	#define DEBUG_ENABLE
+
+#ifdef DEBUG_ENABLE
+#define DEBUG(x, ...) Serial.print(x, ##__VA_ARGS__)
+#define DEBUGLN(x, ...) Serial.println(x, ##__VA_ARGS__)
+#else
+#define DEBUG(x, ...)
+#define DEBUGLN(x, ...)
+#endif
 #include <Arduino.h>
 #include <keysniffer.h>
 #include "Sim800.h"
