@@ -3,7 +3,7 @@
 //#pragma GCC diagnostic ignored "-Wmisleading-indentation"
 #include "keysniffer.h"
 
-byte Keysniffer::KeyDetection(byte(&buf)[SIZE]) {
+byte Keysniffer::KeyDetection(byte(&buf)[8]) {
 	if (comparator()) { return -1; } //wait until high signal is start
 	auto timer = uS;
 	while (!comparator()) {			//Try read METAKOM synchronise bit log 0
@@ -42,7 +42,7 @@ byte Keysniffer::KeyDetection(byte(&buf)[SIZE]) {
 	return ERROR_NOT_RECOGNIZED;
 }
 
-byte Keysniffer::Metakom(byte buf[SIZE]) {
+byte Keysniffer::Metakom(byte buf[]) {
 	byte count1 = 0, count0 = 0, i, result, bitmask;
 #ifdef PERIOD_MEASURE
 	size_t T1 = 0;		// Average full period log 1
@@ -140,7 +140,7 @@ byte Keysniffer::recvBitCyfral() {
 	return dutySecond > dutyFirst;
 }
 
-byte Keysniffer::Cyfral(byte buf[SIZE]) {
+byte Keysniffer::Cyfral(byte buf[]) {
 	again:
 #ifdef PERIOD_MEASURE
 	size_t T1 = 0;		// Average full period log 1
