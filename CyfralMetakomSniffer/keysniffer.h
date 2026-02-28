@@ -1,12 +1,4 @@
 #pragma once
-//#define DEBUG_ENABLE
-#ifdef DEBUG_ENABLE
-#define DEBUG(x, ...) Serial.print(x, ##__VA_ARGS__)
-#define DEBUGLN(x, ...) Serial.println(x, ##__VA_ARGS__)
-#else
-#define DEBUG(x, ...)
-#define DEBUGLN(x, ...)
-#endif
 #include <stddef.h>
 
 #ifdef __cplusplus
@@ -74,3 +66,4 @@ protected:
 	byte dutySecond = 0;
 	byte dutyFirst = 0;
 };
+
