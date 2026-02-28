@@ -108,11 +108,9 @@ volatile byte flagInterrupt = ZERO;
 uint32_t timestamp, period;
 byte flagSmsNotsended = 0, writedKeys = 0, keyReaded = 0;
 
-const byte pin_comparator = PIN_COMP; 
-const byte pin_data = PIN_DATA;
 void delayUs(size_t us) { delayMicroseconds(us); }
-void emul_low_level() { pMode(pin_comparator, OUTPUT); };
-void emul_high_level() { pMode(pin_comparator, INPUT); };
+void emul_low_level() { pMode(PIN_COMP, OUTPUT); };
+void emul_high_level() { pMode(PIN_COMP, INPUT); };
 
 static Keysniffer obj;
 static byte kArray[kLIMIT][keylen] {};
