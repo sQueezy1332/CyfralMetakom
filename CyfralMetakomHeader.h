@@ -116,7 +116,7 @@ volatile byte flagInterrupt = ZERO;
 uint32_t timestamp, period;
 byte flagSmsNotsended = 0, writedKeys = 0, keyReaded = 0;
 
-void delayUs(size_t us) { delayMicroseconds(us); }
+void delay_us(size_t us) { delayMicroseconds(us); }
 void emul_low_impl() { pMode(PIN_COMP, OUTPUT); };
 void emul_high_impl() { pMode(PIN_COMP, INPUT); };
 
