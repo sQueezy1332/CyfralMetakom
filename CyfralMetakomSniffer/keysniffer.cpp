@@ -1,15 +1,15 @@
 #pragma message "Изи кудря"
 //#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 //#pragma GCC diagnostic ignored "-Wmisleading-indentation"
-#include "keysniffer.h"
+#include "CyfralMetakom.h"
 
-byte Keysniffer::KeyDetection(byte(&buf)[8]) {
-	if (comparator()) { return -1; } //wait until high signal is start
+byte CyfralMetakom::KeyDetection(byte(&buf)[8]) {
+	if (comp_impl()) { return -1; } //wait until high signal is start
 	auto timer = uS;
-	while (!comparator()) {			//Try read METAKOM synchronise bit log 0
+	while (!comp_impl()) {			//Try read METAKOM synchronise bit log 0
 		if (uS - timer > 450) {		//50 - 230 datasheet ~450 for last bit + synchro
 			timer = uS;
-			while (!comparator()) {
+			while (!comp_impl()) {
 				if (uS - timer > 200000) {
 					return ERROR_VERY_LONG_LOW;
 				}
@@ -31,7 +31,7 @@ byte Keysniffer::KeyDetection(byte(&buf)[8]) {
 		return (Metakom(buf));
 	}//last bit could be volatile if Cyfral //b000 or b001
 	timer = uS;
-	while (comparator()) {				//wait 1 duty cycle for last half bit start nibble (Cyfral?) 
+	while (comp_impl()) {				//wait 1 duty cycle for last half bit start nibble (Cyfral?) 
 		if (uS - timer > 200) {
 			return ERROR_START_DUTY_HIGH;
 		}
@@ -42,7 +42,7 @@ byte Keysniffer::KeyDetection(byte(&buf)[8]) {
 	return ERROR_NOT_RECOGNIZED;
 }
 
-byte Keysniffer::Metakom(byte buf[]) {
+byte CyfralMetakom::Metakom(byte buf[]) {
 	byte count1 = 0, count0 = 0, i, result, bitmask;
 #ifdef PERIOD_MEASURE
 	size_t T1 = 0;		// Average full period log 1
@@ -94,15 +94,15 @@ last_bit_zero:
 	return NO_ERROR;
 }
 
-byte Keysniffer::recvBitMetakom() {
+byte CyfralMetakom::recvBitMetakom() {
 	auto timer = uS;
-	while (comparator()) {
+	while (comp_impl()) {
 		if (uS - timer > 200) { return ERROR_DUTY_HIGH_METAKOM; }
 	}
 	{ auto t = uS;
 	dutyFirst = t - timer;
 	timer = t; }
-	while (!comparator()) {
+	while (!comp_impl()) {
 		if (uS - timer > 160) {
 			dutySecond = 160;		//may be synchronise bit
 			return ERROR_DUTY_LOW_METAKOM;
@@ -115,9 +115,9 @@ byte Keysniffer::recvBitMetakom() {
 	return dutyFirst > dutySecond;
 }
 
-byte Keysniffer::recvBitCyfral() {
+byte CyfralMetakom::recvBitCyfral() {
 	auto timer = uS;
-	while (!comparator()) {
+	while (!comp_impl()) {
 		if (uS - timer > 200) {
 			return ERROR_DUTY_LOW_CYFRAL;
 		}
@@ -125,7 +125,7 @@ byte Keysniffer::recvBitCyfral() {
 	{ auto t = uS;
 	dutyFirst = t - timer;
 	timer = t; }
-	while (comparator()) {
+	while (comp_impl()) {
 		if (uS - timer > 200) {
 			dutySecond = 200;
 			return ERROR_DUTY_HIGH_CYFRAL;
@@ -140,7 +140,7 @@ byte Keysniffer::recvBitCyfral() {
 	return dutySecond > dutyFirst;
 }
 
-byte Keysniffer::Cyfral(byte buf[]) {
+byte CyfralMetakom::Cyfral(byte buf[]) {
 	again:
 #ifdef PERIOD_MEASURE
 	size_t T1 = 0;		// Average full period log 1
@@ -183,7 +183,7 @@ byte Keysniffer::Cyfral(byte buf[]) {
 	return NO_ERROR;
 }
 
-void Keysniffer::Emulate(const byte buf[], byte keyType, byte emulRetry) {
+void CyfralMetakom::Emulate(const byte buf[], byte keyType, byte emulRetry) {
 #ifdef PERIOD_MEASURE
 	size_t T1 = 0;		// Average full period log 1
 	size_t T0 = 0;		// Average full period log 0
@@ -228,10 +228,10 @@ void Keysniffer::Emulate(const byte buf[], byte keyType, byte emulRetry) {
 		}	break;
 	}
 	case METAKOM: {
-		emul_low_level();									//sending synchronise bit log 0
+		emul_low_impl();									//sending synchronise bit log 0
 		(buf[3] & 1) ? delayUs(Tj1) : delayUs(Tj0);
 		for (byte retry = 0, bitmask, i; retry < emulRetry; retry++) {
-			emul_low_level();
+			emul_low_impl();
 			delayUs(T1);													//sending synchronise bit log 0
 			for (bitmask = 0b100; bitmask; bitmask >>= 1) {
 				if (METAKOM & bitmask) { //sending start nibble
@@ -253,28 +253,28 @@ void Keysniffer::Emulate(const byte buf[], byte keyType, byte emulRetry) {
 				}
 			}
 		}
-		emul_high_level();
+		emul_high_impl();
 	}
 	}
 	//EMULATE_HIGH_OFF(pin_data);
 }
 
-void Keysniffer::writeBitCyfral(size_t Ti, size_t Tj) {
-	emul_low_level();	// Start high current consumption	
+void CyfralMetakom::writeBitCyfral(size_t Ti, size_t Tj) {
+	emul_low_impl();	// Start high current consumption	
 	delayUs(Ti);
-	emul_high_level();		// End high current consumption
+	emul_high_impl();		// End high current consumption
 	delayUs(Tj);
 }
 
-void Keysniffer::writeBitMetakom(size_t Ti, size_t Tj) {
-	emul_high_level();		// End high current consumption
+void CyfralMetakom::writeBitMetakom(size_t Ti, size_t Tj) {
+	emul_high_impl();		// End high current consumption
 	delayUs(Ti);
-	emul_low_level();		// Start high current consumption
+	emul_low_impl();		// Start high current consumption
 	delayUs(Tj);
 }
 
 /*
-bool Keysniffer::comparator() {
+bool CyfralMetakom::comp_impl() {
 	static byte iterator = WAIT_RETRY_COUNT;
 	byte old_iterator = 0;
 	for (;;) {
