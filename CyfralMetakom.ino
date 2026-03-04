@@ -200,7 +200,7 @@ void init_io() {
 	pInit(PIN_DATA, INPUT);
 }
 
-bool comparator() {
+bool comp_impl() {
 	static byte prev_state = COMP();
 	const byte state = COMP();
 	if (state != prev_state) {
