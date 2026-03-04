@@ -11,7 +11,7 @@
 #define DEBUGLN(x, ...)
 #endif
 #include <Arduino.h>
-#include <keysniffer.h>
+#include <CyfralMetakom.h>
 #include "Sim800.h"
 
 #ifdef __AVR__
@@ -117,10 +117,10 @@ uint32_t timestamp, period;
 byte flagSmsNotsended = 0, writedKeys = 0, keyReaded = 0;
 
 void delayUs(size_t us) { delayMicroseconds(us); }
-void emul_low_level() { pMode(PIN_COMP, OUTPUT); };
-void emul_high_level() { pMode(PIN_COMP, INPUT); };
+void emul_low_impl() { pMode(PIN_COMP, OUTPUT); };
+void emul_high_impl() { pMode(PIN_COMP, INPUT); };
 
-static Keysniffer obj;
+static CyfralMetakom obj;
 static byte kArray[kLIMIT][keylen] {};
 static void emulateKeys(byte keyNO, byte keyType);
 static void sortingArray(byte (&buf)[kLIMIT][keylen] = kArray, byte& count = keyReaded);
