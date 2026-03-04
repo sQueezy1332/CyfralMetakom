@@ -42,7 +42,7 @@ byte CyfralMetakom::KeyDetection(byte(&buf)[8]) {
 	return ERROR_NOT_RECOGNIZED;
 }
 
-byte CyfralMetakom::Metakom(byte buf[]) {
+byte CyfralMetakom::Metakom(byte buf[8]) {
 	byte count1 = 0, count0 = 0, i, result, bitmask;
 #ifdef PERIOD_MEASURE
 	size_t T1 = 0;		// Average full period log 1
@@ -140,7 +140,7 @@ byte CyfralMetakom::recvBitCyfral() {
 	return dutySecond > dutyFirst;
 }
 
-byte CyfralMetakom::Cyfral(byte buf[]) {
+byte CyfralMetakom::Cyfral(byte buf[8]) {
 	again:
 #ifdef PERIOD_MEASURE
 	size_t T1 = 0;		// Average full period log 1
