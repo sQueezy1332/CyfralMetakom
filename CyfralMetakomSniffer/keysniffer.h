@@ -20,14 +20,14 @@ extern "C" {
 typedef unsigned char byte;
 
 extern void delayUs(size_t);
-extern void emul_low_level();
-extern void emul_high_level();
-extern bool comparator();
+extern void emul_low_impl();
+extern void emul_high_impl();
+extern bool comp_impl();
 
-class Keysniffer
+class CyfralMetakom
 {
 public:
-	Keysniffer() { /*init_io();*/ };
+	CyfralMetakom() { /*init_io();*/ };
 	byte KeyDetection(byte (&buf)[8]);
 	byte Metakom(byte buf[8]);
 	byte Cyfral(byte buf[8]);
