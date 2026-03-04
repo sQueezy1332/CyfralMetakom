@@ -19,10 +19,11 @@ extern "C" {
 #endif // !unlikely
 typedef unsigned char byte;
 
-extern void delayUs(size_t);
+extern void delay_us(size_t); 
 extern void emul_low_impl();
 extern void emul_high_impl();
 extern bool comp_impl();
+//extern void delayMicroseconds();
 
 class CyfralMetakom
 {
