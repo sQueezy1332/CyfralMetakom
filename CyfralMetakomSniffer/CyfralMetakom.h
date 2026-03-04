@@ -4,7 +4,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-	extern unsigned long micros(void);
+	unsigned long micros(void);
 	//extern void delayMicroseconds(double);
 #ifdef __cplusplus
 	}
@@ -60,3 +60,4 @@ protected:
 	byte dutySecond = 0;
 	byte dutyFirst = 0;
 };
+
