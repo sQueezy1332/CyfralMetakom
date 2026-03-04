@@ -229,10 +229,10 @@ void CyfralMetakom::Emulate(const byte buf[], byte keyType, byte emulRetry) {
 	}
 	case METAKOM: {
 		emul_low_impl();									//sending synchronise bit log 0
-		(buf[3] & 1) ? delayUs(Tj1) : delayUs(Tj0);
+		(buf[3] & 1) ? delay_us(Tj1) : delay_us(Tj0);
 		for (byte retry = 0, bitmask, i; retry < emulRetry; retry++) {
 			emul_low_impl();
-			delayUs(T1);													//sending synchronise bit log 0
+			delay_us(T1);													//sending synchronise bit log 0
 			for (bitmask = 0b100; bitmask; bitmask >>= 1) {
 				if (METAKOM & bitmask) { //sending start nibble
 					writeBitMetakom(Ti1, Tj1);
@@ -261,16 +261,16 @@ void CyfralMetakom::Emulate(const byte buf[], byte keyType, byte emulRetry) {
 
 void CyfralMetakom::writeBitCyfral(size_t Ti, size_t Tj) {
 	emul_low_impl();	// Start high current consumption	
-	delayUs(Ti);
+	delay_us(Ti);
 	emul_high_impl();		// End high current consumption
-	delayUs(Tj);
+	delay_us(Tj);
 }
 
 void CyfralMetakom::writeBitMetakom(size_t Ti, size_t Tj) {
 	emul_high_impl();		// End high current consumption
-	delayUs(Ti);
+	delay_us(Ti);
 	emul_low_impl();		// Start high current consumption
-	delayUs(Tj);
+	delay_us(Tj);
 }
 
 /*
