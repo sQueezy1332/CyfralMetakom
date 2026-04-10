@@ -95,16 +95,17 @@ void loop() {
 
 void HandleCall() {
 	AutoFun <> obj;
-	if (strstr(waitResponse(), PHONE_NUMBER_1) || strstr(respBuf, PHONE_NUMBER_2)) {
+	if(!waitResponse()) return;
+	if (strstr(respBuf, PHONE_NUMBER_1) || strstr(respBuf, PHONE_NUMBER_2)) {
 		sendAT("ATA");
-		char* colonIndex;
+		const char* colonIndex;
 		byte keyid = 0, keyType = 0;
 		auto timer = mS;
-		while (mS - timer < 10000) {
-			if ((colonIndex = strchr(waitResponse(), ':'))) {
+		while (mS - timer < 10001) {
+			if ((colonIndex = sendAT(NULL, ':'))) {
 				timer = mS;
 				if (colonIndex[2] == '*') {
-					if ((colonIndex = strchr(waitResponse(), ':')) != NULL) {
+					if ((colonIndex = sendAT(NULL,':'))) {
 						timer = mS;
 						switch (colonIndex[2]) {
 						case '*':
@@ -130,9 +131,9 @@ void HandleCall() {
 						}
 					}	continue;
 				} else if (colonIndex[2] == '#') {
-					if (strchr(waitResponse(2), '*')) {
-						if (strchr(waitResponse(2), '#'))
-							if (strchr(waitResponse(2), '*'))
+					if (sendAT(NULL, '*', 2000)) {
+						if (sendAT(NULL, '#', 2000))
+							if (sendAT(NULL, '*', 2000))
 								clearMemory();
 					} else goto exit;
 				} else {
@@ -140,7 +141,7 @@ void HandleCall() {
 					if (keyid > writedKeys || keyid == 0) continue;
 					keyid--;
 				}
-				if ((colonIndex = strchr(waitResponse(), ':'))) {
+				if ((colonIndex = sendAT(NULL, ':'))) {
 					timer = mS;
 					keyType = atoi(colonIndex + 2);
 					if (keyType == 2 || keyType == 1) {
@@ -158,7 +159,7 @@ exit:
 
 void sendKeys(const byte& keysAmount) {
 	AutoFun <>obj;  DEBUG(F("\tsendkey"));
-	if (!SendSms(kArray, ("AT+CMGS=\"+7" SEND_SMS_PHONE "\""), vArray, keysAmount, voltagekeyWrited)) {
+	if (!SendSms(kArray, SEND_SMS_PHONE, vArray, keysAmount, voltagekeyWrited)) {
 		flagSmsNotsended |= 1;
 		timestamp = millis();
 		period = (15 * 60 * 1000ul);
