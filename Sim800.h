@@ -92,8 +92,8 @@ bool SendSms(const byte pBase[][keylen], const char* number, word* vArray, byte 
 	if (flagInterrupt) { sim.print("flagInterrupt = ");  sim.println(flagInterrupt); }
 	sim.print(rssi);
 	if (sendAT(SUB, "CMGS")) return true;
-	else if (sendAT(ESC, '>')) { 
-		if (!waitResponse() || !strchr(respBuf, ERROR)) 
+	else if (sendAT(ESC, '>')) {
+		if (!waitResponse() || !strchr(respBuf, ERROR))
 			resetSIM(); 
 	}
 	return false;
@@ -111,12 +111,12 @@ void initSIM() {
 	sim.setTimeout(100);
 	delay(5000);
 	if (!sendAT("AT")) sendAT(ESC);
-	/*echo off, text mode off, error numeric, AON on, sms text mode, DTMF on */
-	sendAT("ATE0V0+CMEE=1;+CLIP=1;+DDET=1,250;+CMGF=1;&W"); //ATE0V1
+	/*echo, text mode, error numeric, AON on, sms text mode, DTMF on (250ms delay), Save */
+	sendAT("ATE0" "V0" "+CMEE=1;" "+CLIP=1;" "+CMGF=1;" "+DDET=1,250;" "&W"); //ATE0V1
 }
 void resetSIM() {
+	if (sendAT("AT+CFUN=1,1", OK)) return;
 	pinMode(PIN_SIM_RST, OUTPUT);
 	delay(100);
 	pinMode(PIN_SIM_RST, INPUT);
 }
-
