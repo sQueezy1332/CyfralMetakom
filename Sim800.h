@@ -53,15 +53,16 @@ bool waitResponse(size_t timeout = 5000) {
 }
 
 
-bool sendAT(const char* cmd, const char* response, size_t timeout = 3000) { //retry 0 dont waiting
-	sim.println(cmd);
-	if (!waitResponse(timeout)) return false;
-	return !strstr(respBuf, response);
+const char* sendAT(const char* cmd, const char* response, size_t timeout = 3000) {
+	if (cmd) { sim.println(cmd); }
+	if (!waitResponse(timeout)) return NULL;
+	return strstr(respBuf, response);
 }
 
-bool sendAT(const char* cmd, char response = OK, size_t timeout = 3000) {
-	char resp[] { response, '\0' };
-	return sendAT(cmd, resp, timeout);
+const char* sendAT(const char* cmd, char response = OK, size_t timeout = 3000) {
+	if (cmd) { sim.println(cmd); }
+	if (!waitResponse(timeout)) return NULL;
+	return strchr(respBuf, response);
 }
 
 bool SendSms(const byte pBase[][keylen], const char* number, word* vArray, byte keysAmount, byte volKeysAmount) {
@@ -93,7 +94,7 @@ bool SendSms(const byte pBase[][keylen], const char* number, word* vArray, byte 
 	sim.print(rssi);
 	if (sendAT(SUB, "CMGS")) return true;
 	else if (sendAT(ESC, '>')) {
-		if (!waitResponse() || !strchr(respBuf, ERROR))
+		if (!sendAT(NULL, ERROR))
 			resetSIM(); 
 	}
 	return false;
@@ -111,11 +112,15 @@ void initSIM() {
 	sim.setTimeout(100);
 	delay(5000);
 	if (!sendAT("AT")) sendAT(ESC);
-	/*echo, text mode, error numeric, AON on, sms text mode, DTMF on (250ms delay), Save */
-	sendAT("ATE0" "V0" "+CMEE=1;" "+CLIP=1;" "+CMGF=1;" "+DDET=1,250;" "&W"); //ATE0V1
+	/*echo, text mode, error numeric, AON on, sms text mode, DTMF on (250ms delay), LED, Save */
+	sendAT("ATE0" "V0" "+CMEE=1;" "+CLIP=1;" "+CMGF=1;" "+DDET=1,250; +CNETLIGHT=0" "&W"); //ATE0V1
 }
 void resetSIM() {
-	if (sendAT("AT+CFUN=1,1", OK)) return;
+	if (sendAT("AT+CFUN=1,1", OK)) {
+		DEBUG("RESET_"); DEBUGLN("AT");
+		return;
+	}
+	DEBUGLN("PIN");
 	pinMode(PIN_SIM_RST, OUTPUT);
 	delay(100);
 	pinMode(PIN_SIM_RST, INPUT);
