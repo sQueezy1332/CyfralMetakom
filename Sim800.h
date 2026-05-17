@@ -11,15 +11,15 @@ typedef uint8_t byte;
 #define RX 10 //green TX on sim800 push-pull
 #define TX 11  //orange RX on sim800 pull-up
 #define PIN_SIM_RST 9
-#define OK			'0'		// 0x30
-#define CONNECT     '1'		// 0x31
-#define RING		'2'		// 0x32
-#define NOCARRIER	'3'		// 0x33
-#define ERROR		'4'		// 0x34
-#define NODIALTONE	'6'		// 0x36
-#define BUSY		'7'		// 0x37
-#define NOANSWER	'8'		// 0x38
-#define PROCEEDING	'9'		// 0x39
+#define OK			"0"		// 0x30
+#define CONNECT     "1"		// 0x31
+#define RING		"2"		// 0x32
+#define NOCARRIER	"3"		// 0x33
+#define ERROR		"4"		// 0x34
+#define NODIALTONE	"6"		// 0x36
+#define BUSY		"7"		// 0x37
+#define NOANSWER	"8"		// 0x38
+#define PROCEEDING	"9"		// 0x39
 #define LF			'\n'	// 0xA
 #define CR			'\r'	// 0xD
 #define TAB			'\t'	// 9
@@ -38,32 +38,31 @@ char respBuf[RESP_BUFLEN] {};
 void initSIM();
 void resetSIM();
 
-bool waitResponse(size_t timeout = 5000) {
+const char* waitResponse(const char* response, size_t timeout = 5000) {
 	uint32_t timer = millis();
 	do {
 		if (sim.available()) {
 			byte amount = sim.readBytesUntil('\n', respBuf, RESP_BUFLEN);
 			respBuf[amount] = '\0';
 			DEBUG(respBuf);
-			return true;
+			return strstr(respBuf, response);
 		}
 	} while (millis() - timer < timeout);
 	DEBUG(F("\tTimeout..."));
-	return false;
+	return NULL;
 }
 
 
-const char* sendAT(const char* cmd, const char* response, size_t timeout = 3000) {
-	if (cmd) { sim.println(cmd); }
-	if (!waitResponse(timeout)) return NULL;
-	return strstr(respBuf, response);
+const char* sendAT(const char* cmd, const char* response = OK, size_t timeout = 3000) {
+	sim.println(cmd);
+	return waitResponse(response, timeout);
 }
 
-const char* sendAT(const char* cmd, char response = OK, size_t timeout = 3000) {
-	if (cmd) { sim.println(cmd); }
-	if (!waitResponse(timeout)) return NULL;
-	return strchr(respBuf, response);
-}
+//const char* sendAT(const char* cmd, char response = OK, size_t timeout = 3000) {
+//	if (cmd) { sim.println(cmd); }
+//	if (!waitResponse(timeout)) return NULL;
+//	return strchr(respBuf, response);
+//}
 
 bool SendSms(const byte pBase[][keylen], const char* number, word* vArray, byte keysAmount, byte volKeysAmount) {
 	if (!sendAT("AT+CCALR?", CONNECT)) {
@@ -71,11 +70,11 @@ bool SendSms(const byte pBase[][keylen], const char* number, word* vArray, byte 
 		delay(5000);
 		if (!sendAT("AT+CCALR?", CONNECT)) return false;
 	}
-	sendAT("AT+CSQ", ':');
+	sendAT("AT+CSQ", ":");
 	char rssi[12];
 	strlcpy(rssi, respBuf, sizeof(rssi));
 	sim.print("AT+CMGS=\""); sim.print(number);
-	if (!sendAT("\"", '>')) {
+	if (!sendAT("\"", ">")) {
 		resetSIM();
 		return false;
 	}
@@ -93,20 +92,13 @@ bool SendSms(const byte pBase[][keylen], const char* number, word* vArray, byte 
 	if (flagInterrupt) { sim.print("flagInterrupt = ");  sim.println(flagInterrupt); }
 	sim.print(rssi);
 	if (sendAT(SUB, "CMGS")) return true;
-	else if (sendAT(ESC, '>')) {
-		if (!sendAT(NULL, ERROR))
+	else if (sendAT(ESC, ">")) {
+		if (!waitResponse(ERROR))
 			resetSIM(); 
 	}
 	return false;
 }
-/*
-void available() {
-	for (;;) {
-		if (sim.available())  Serial.write(sim.read());
-		if (Serial.available()) sim.write(Serial.read());
-	}
-}
-*/
+
 void initSIM() {
 	sim.begin(BAUDRATE);
 	sim.setTimeout(100);
@@ -115,7 +107,7 @@ void initSIM() {
 	/*echo, text mode, error numeric, AON on, sms text mode, DTMF on (250ms delay), LED, Save */
 	sendAT("ATE0" "V0" "+CMEE=1;" "+CLIP=1;" "+CMGF=1;" "+DDET=1,250; +CNETLIGHT=0" "&W"); //ATE0V1
 }
-void resetSIM() {
+void resetSIM() { //AT+CPOWD=1
 	if (sendAT("AT+CFUN=1,1", OK)) {
 		DEBUG("RESET_"); DEBUGLN("AT");
 		return;
@@ -125,3 +117,12 @@ void resetSIM() {
 	delay(100);
 	pinMode(PIN_SIM_RST, INPUT);
 }
+
+/*
+void available() {
+	for (;;) {
+		if (sim.available())  Serial.write(sim.read());
+		if (Serial.available()) sim.write(Serial.read());
+	}
+}
+*/
