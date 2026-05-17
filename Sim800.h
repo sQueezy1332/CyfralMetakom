@@ -38,14 +38,15 @@ char respBuf[RESP_BUFLEN] {};
 void initSIM();
 void resetSIM();
 
-const char* waitResponse(const char* response, size_t timeout = 5000) {
+const char* waitResponse(const char* resp, size_t timeout = 5000) {
 	uint32_t timer = millis();
 	do {
 		if (sim.available()) {
-			byte amount = sim.readBytesUntil('\n', respBuf, RESP_BUFLEN);
-			respBuf[amount] = '\0';
-			DEBUG(respBuf);
-			return strstr(respBuf, response);
+			size_t amount = sim.readBytesUntil('\n', respBuf, RESP_BUFLEN-1);
+#ifdef DEBUG_ENABLE
+			respBuf[amount] = '\0'; DEBUG(respBuf);
+#endif // DEBUG_ENABLE
+			return (const char*)memmem(respBuf, amount, resp, strlen(resp));
 		}
 	} while (millis() - timer < timeout);
 	DEBUG(F("\tTimeout..."));
@@ -53,9 +54,9 @@ const char* waitResponse(const char* response, size_t timeout = 5000) {
 }
 
 
-const char* sendAT(const char* cmd, const char* response = OK, size_t timeout = 3000) {
+const char* sendAT(const char* cmd, const char* resp = OK, size_t timeout = 3000) {
 	sim.println(cmd);
-	return waitResponse(response, timeout);
+	return waitResponse(resp, timeout);
 }
 
 //const char* sendAT(const char* cmd, char response = OK, size_t timeout = 3000) {
