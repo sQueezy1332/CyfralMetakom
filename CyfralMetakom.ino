@@ -94,20 +94,21 @@ void loop() {
 }
 
 void HandleCall() {
-	AutoFun <> obj;
-	if(!waitResponse()) return;
+	AutoFun <> obj; const char* ch;
+	if(!(ch = waitResponse("+CLIP:"))) return;
+	ch += sizeof("+CLIP:");
 	if (strstr(respBuf, PHONE_NUMBER_1) || strstr(respBuf, PHONE_NUMBER_2)) {
 		sendAT("ATA");
-		const char* colonIndex;
+		const char* ch;
 		byte keyid = 0, keyType = 0;
 		auto timer = mS;
 		while (mS - timer < 10001) {
-			if ((colonIndex = sendAT(NULL, ':'))) {
+			if ((ch = waitResponse(":"))) {
 				timer = mS;
-				if (colonIndex[2] == '*') {
-					if ((colonIndex = sendAT(NULL,':'))) {
+				if (ch[2] == '*') {
+					if ((ch = waitResponse(":"))) {
 						timer = mS;
-						switch (colonIndex[2]) {
+						switch (ch[2]) {
 						case '*':
 							sendAT("ATH");
 							getfromeeprom();
@@ -130,20 +131,20 @@ void HandleCall() {
 						default: goto exit;
 						}
 					}	continue;
-				} else if (colonIndex[2] == '#') {
-					if (sendAT(NULL, '*', 2000)) {
-						if (sendAT(NULL, '#', 2000))
-							if (sendAT(NULL, '*', 2000))
+				} else if (ch[2] == '#') {
+					if (waitResponse("*", 2000)) {
+						if (waitResponse("#", 2000))
+							if (waitResponse("*", 2000))
 								clearMemory();
 					} else goto exit;
 				} else {
-					keyid = atoi(colonIndex + 2);
+					keyid = atoi(ch + 2);
 					if (keyid > writedKeys || keyid == 0) continue;
 					keyid--;
 				}
-				if ((colonIndex = sendAT(NULL, ':'))) {
+				if ((ch = waitResponse( ":"))) {
 					timer = mS;
-					keyType = atoi(colonIndex + 2);
+					keyType = atoi(ch + 2);
 					if (keyType == 2 || keyType == 1) {
 						emulateKeys(keyid, keyType);
 						timer = mS;
